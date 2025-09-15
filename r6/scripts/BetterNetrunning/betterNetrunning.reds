@@ -12,19 +12,19 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
   let data: ConnectedClassTypes;
   let i: Int32;
   let miniGameActionRecord: wref<MinigameAction_Record>;
-  let deviceHasBeenBreached: Bool;
+  // let deviceHasBeenBreached: Bool; // Unused variable
   let connectedToNetwork: Bool;
   this.InjectBetterNetrunningPrograms(programs);
   // Store the entity being breached in the minigame blackboard, for use in the access point logic
   this.m_blackboardSystem.Get(GetAllBlackboardDefs().HackingMinigame).SetVariant(GetAllBlackboardDefs().HackingMinigame.Entity, ToVariant(this.m_entity));
   if (this.m_entity as GameObject).IsPuppet() {
     data = (this.m_entity as ScriptedPuppet).GetMasterConnectedClassTypes();
-    deviceHasBeenBreached = false;
+    // deviceHasBeenBreached = false;
     connectedToNetwork = true;
     //Log(NameToString((this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink().GetParentDevice().GetClassName()));
   } else {
     data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
-    deviceHasBeenBreached = (this.m_entity as Device).GetDevicePS().WasHackingMinigameSucceeded();
+    // deviceHasBeenBreached = (this.m_entity as Device).GetDevicePS().WasHackingMinigameSucceeded();
     connectedToNetwork = (this.m_entity as Device).GetDevicePS().IsConnectedToPhysicalAccessPoint();
   };
   i = ArraySize(Deref(programs)) - 1;
@@ -463,7 +463,7 @@ protected final func IsWhiteListedForHacks() -> Bool {
 @replaceMethod(ScriptedPuppet)
 protected func OnIncapacitated() -> Void {
   let incapacitatedEvent: ref<IncapacitatedEvent>;
-  let link: ref<PuppetDeviceLinkPS>;
+  // let link: ref<PuppetDeviceLinkPS>; // Unused variable
   if this.IsIncapacitated() {
     return;
   };
@@ -746,7 +746,7 @@ public final func InjectBetterNetrunningPrograms(programs: script_ref<array<Mini
  * Gets the top-level access point on the network
  */
 @addMethod(AccessPointControllerPS)
-public const func GetMainframe() -> ref<AccessPointControllerPS> {
+public func GetMainframe() -> ref<AccessPointControllerPS> {
   let parents: array<ref<DeviceComponentPS>>;
   this.GetParents(parents);
   let i: Int32 = 0;
@@ -816,7 +816,7 @@ protected cb func OnAccessPointMiniGameStatus(evt: ref<AccessPointMiniGameStatus
   QuickhackModule.RequestRefreshQuickhackMenu(this.GetGame(), this.GetEntityID());
 }
 
-public static func CyberdeckQualityFromConfigValue(value: Int32) -> gamedataQuality {
+public func CyberdeckQualityFromConfigValue(value: Int32) -> gamedataQuality {
   switch(value) {
     case 2:
       return gamedataQuality.CommonPlus;
@@ -845,7 +845,7 @@ public static func CyberdeckQualityFromConfigValue(value: Int32) -> gamedataQual
 /*
  * Required because CDPR changed the enum values so they are no longer in order from lowest to highest (WHY!?!)
  */
-public static func CyberdeckQualityToRank(quality: gamedataQuality) -> Int32 {
+public func CyberdeckQualityToRank(quality: gamedataQuality) -> Int32 {
   switch(quality) {
     case gamedataQuality.Common:
       return 1;
@@ -873,7 +873,7 @@ public static func CyberdeckQualityToRank(quality: gamedataQuality) -> Int32 {
   return 0;
 }
 
-public static func CyberdeckConditionMet(gameInstance: GameInstance, value: Int32) -> Bool {
+public func CyberdeckConditionMet(gameInstance: GameInstance, value: Int32) -> Bool {
   let systemReplacementID: ItemID = EquipmentSystem.GetData(GetPlayer(gameInstance)).GetActiveItem(gamedataEquipmentArea.SystemReplacementCW);
   let itemRecord: wref<Item_Record> = RPGManager.GetItemRecord(systemReplacementID);
   let playerCyberdeckQuality: gamedataQuality = itemRecord.Quality().Type();
@@ -881,21 +881,21 @@ public static func CyberdeckConditionMet(gameInstance: GameInstance, value: Int3
   return CyberdeckQualityToRank(playerCyberdeckQuality) >= CyberdeckQualityToRank(minQuality);
 }
 
-public static func CyberdeckConditionEnabled(value: Int32) -> Bool {
+public func CyberdeckConditionEnabled(value: Int32) -> Bool {
   return value > 1;
 }
 
-public static func IntelligenceConditionMet(gameInstance: GameInstance, value: Int32) -> Bool {
+public func IntelligenceConditionMet(gameInstance: GameInstance, value: Int32) -> Bool {
   let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(gameInstance);
   let playerIntelligence: Int32 = Cast(statsSystem.GetStatValue(Cast(GetPlayer(gameInstance).GetEntityID()), gamedataStatType.Intelligence));
   return playerIntelligence >= value;
 }
 
-public static func IntelligenceConditionEnabled(value: Int32) -> Bool {
+public func IntelligenceConditionEnabled(value: Int32) -> Bool {
   return value > 3;
 }
 
-public static func EnemyLevelConditionMet(gameInstance: GameInstance, enemy: wref<Entity>, value: Int32) -> Bool {
+public func EnemyLevelConditionMet(gameInstance: GameInstance, enemy: wref<Entity>, value: Int32) -> Bool {
   let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(gameInstance);
   let playerLevel: Int32 = Cast(statsSystem.GetStatValue(Cast(GetPlayer(gameInstance).GetEntityID()), gamedataStatType.Level));
   let enemyLevel: Int32 = Cast(statsSystem.GetStatValue(Cast(enemy.GetEntityID()), gamedataStatType.Level));
@@ -903,11 +903,11 @@ public static func EnemyLevelConditionMet(gameInstance: GameInstance, enemy: wre
   return levelDifference >= value;
 }
 
-public static func EnemyLevelConditionEnabled(value: Int32) -> Bool {
+public func EnemyLevelConditionEnabled(value: Int32) -> Bool {
   return value > -51;
 }
 
-public static func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32, enemyLevelValue: Int32) -> Bool {
+public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32, enemyLevelValue: Int32) -> Bool {
   if alwaysAllow {
     return true;
   }
@@ -928,7 +928,7 @@ public static func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<E
   }
 }
 
-public static func ShouldUnlockHackDevice(gameInstance: GameInstance, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32) -> Bool {
+public func ShouldUnlockHackDevice(gameInstance: GameInstance, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32) -> Bool {
   if alwaysAllow {
     return true;
   }
