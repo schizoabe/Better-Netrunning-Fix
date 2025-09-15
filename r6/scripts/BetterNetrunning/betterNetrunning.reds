@@ -525,21 +525,23 @@ protected func OnDied() -> Void {
 
 @addMethod(DeviceComponentPS)
 public final func IsConnectedToPhysicalAccessPoint() -> Bool {
-  let apControllers: array<ref<AccessPointControllerPS>>;
-  if !IsDefined(this as SharedGameplayPS) {
+  let sharedGameplayPS: ref<SharedGameplayPS> = this as SharedGameplayPS;
+  if !IsDefined(sharedGameplayPS) {
     return false;
   }
-  apControllers = (this as SharedGameplayPS).GetAccessPoints();
-  for currentAPController in apControllers {
-    let children: array<ref<DeviceComponentPS>>;
-    currentAPController.GetChildren(children);
-    for childDevice in children {
-      if IsDefined(childDevice.GetOwnerEntityWeak() as AccessPoint) {
-        return true;
-      }
-    }
-  }
-  return false;
+
+  let apControllers: array<ref<AccessPointControllerPS>> = sharedGameplayPS.GetAccessPoints();
+  return ArraySize(apControllers) > 0;
+
+  // for currentAPController in apControllers {
+  //   let children: array<ref<DeviceComponentPS>>;
+  //   currentAPController.GetChildren(children);
+  //   for childDevice in children {
+  //     if IsDefined(childDevice.GetOwnerEntityWeak() as AccessPoint) {
+  //       return true;
+  //     }
+  //   }
+  // }
 }
 
 /*
