@@ -9,6 +9,8 @@ local settings = {
     AlwaysAllowPing = true,
     AlwaysAllowWhistle = false,
     AlwaysAllowDistract = false,
+    -- Controls
+    BreachUnconsciousActionChoice = 3, -- 1..4 maps to Choice1..Choice4
     -- Access Points
     UnlockIfNoAccessPoint = true,
     DisableDatamineOneTwo = false,
@@ -31,11 +33,12 @@ local settings = {
     ProgressionIntelligenceNPCsCombat = 3,
     ProgressionIntelligenceNPCsControl = 3,
     ProgressionIntelligenceNPCsUltimate = 3,
-    -- Progression - Enemy Level
-    ProgressionEnemyLevelNPCsCovert = -51,
-    ProgressionEnemyLevelNPCsCombat = -51,
-    ProgressionEnemyLevelNPCsControl = -51,
-    ProgressionEnemyLevelNPCsUltimate = -51,
+    -- Progression - Enemy Rarity
+    -- 1: Disabled, 2: Trash, 3: Weak, 4: Normal, 5: Rare, 6: Officer, 7: Elite, 8: Boss, 9: MaxTac
+    ProgressionEnemyRarityNPCsCovert = 1,
+    ProgressionEnemyRarityNPCsCombat = 1,
+    ProgressionEnemyRarityNPCsControl = 1,
+    ProgressionEnemyRarityNPCsUltimate = 1,
     -- Progression - Always Unlocked
     ProgressionAlwaysBasicDevices = false,
     ProgressionAlwaysCameras = false,
@@ -72,7 +75,7 @@ function SetupUnconsciousBreachAction()
     TweakDB:SetFlat("Takedown.BreachUnconsciousOfficer.actionName", "RemoteBreach")
 	TweakDB:SetFlat("Takedown.BreachUnconsciousOfficer.activationTime", {})
 
-	TweakDB:SetFlat("Interactions.BreachUnconsciousOfficer.action", "Choice3")
+    ApplyBreachUnconsciousActionChoice()
 end
 
 function SetupAccessProgram(interactionName, actionName, caption, description, icon, complexity)
@@ -94,12 +97,13 @@ function BuildSettingsMenu(nativeSettings)
 
     nativeSettings.addSubcategory("/BetterNetrunning/Breaching", "Breaching")
     nativeSettings.addSubcategory("/BetterNetrunning/AccessPoints", "Access Points")
+    nativeSettings.addSubcategory("/BetterNetrunning/Controls", "Controls")
     nativeSettings.addSubcategory("/BetterNetrunning/RemovedQuickhacks", "Removed Quickhacks")
     nativeSettings.addSubcategory("/BetterNetrunning/UnlockedQuickhacks", "Always Unlocked Quickhacks")
     nativeSettings.addSubcategory("/BetterNetrunning/Progression", "Progression")
     nativeSettings.addSubcategory("/BetterNetrunning/ProgressionCyberdeck", "Progression - Cyberdeck Quality")
     nativeSettings.addSubcategory("/BetterNetrunning/ProgressionIntelligence", "Progression - Intelligence")
-    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionEnemyLevel", "Progression - Enemy Level Difference")
+    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionEnemyRarity", "Progression - Enemy Rarity")
 
     -- Breaching
     nativeSettings.addSwitch("/BetterNetrunning/Breaching", "Enable Classic Mode", "If true, the entire network can be breached by uploading any daemon. This disables the subnet system, along with the corresponding breach daemons.", settings.EnableClassicMode, false, function(state)
@@ -110,6 +114,22 @@ function BuildSettingsMenu(nativeSettings)
         settings.AllowBreachUnconscious = state
         SaveSettings()
     end)
+
+    -- Controls
+    local breachActionChoices = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
+    nativeSettings.addSelectorString(
+        "/BetterNetrunning/Controls",
+        "Unconscious Breach Action",
+        "Select which Interaction Choice triggers the Unconscious Breach. The game maps Choice1..4 to the correct key/button for keyboard and gamepad.",
+        breachActionChoices,
+        settings.BreachUnconsciousActionChoice,
+        3,
+        function(state)
+            settings.BreachUnconsciousActionChoice = state
+            ApplyBreachUnconsciousActionChoice()
+            SaveSettings()
+        end
+    )
 
     -- Access Points
     nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", "Unlock Networks With No Access Points", "If true, all quickhacks are automatically allowed if there are no access points on the network.", settings.UnlockIfNoAccessPoint, true, function(state)
@@ -244,28 +264,36 @@ function BuildSettingsMenu(nativeSettings)
         SaveSettings()
     end)
 
-    -- Progression - Enemy Level
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionEnemyLevel", "NPCs - Covert", "Minimum level difference (player minus enemy) to access covert quickhacks on NPCs. (-51 = Disabled)", -51, 50, 1, settings.ProgressionEnemyLevelNPCsCovert, -51, function(state)
-        settings.ProgressionEnemyLevelNPCsCovert = state
+    -- Progression - Enemy Rarity
+    local enemyRarityOptions = {[1] = "Disabled", [2] = "Trash", [3] = "Weak", [4] = "Normal", [5] = "Rare", [6] = "Officer", [7] = "Elite", [8] = "Boss", [9] = "MaxTac"}
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Covert", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCovert, 1, function(state)
+        settings.ProgressionEnemyRarityNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionEnemyLevel", "NPCs - Combat", "Minimum level difference (player minus enemy) to access combat quickhacks on NPCs. (-51 = Disabled)", -51, 50, 1, settings.ProgressionEnemyLevelNPCsCombat, -51, function(state)
-        settings.ProgressionEnemyLevelNPCsCombat = state
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Combat", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCombat, 1, function(state)
+        settings.ProgressionEnemyRarityNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionEnemyLevel", "NPCs - Control", "Minimum level difference (player minus enemy) to access control quickhacks on NPCs. (-51 = Disabled)", -51, 50, 1, settings.ProgressionEnemyLevelNPCsControl, -51, function(state)
-        settings.ProgressionEnemyLevelNPCsControl = state
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Control", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsControl, 1, function(state)
+        settings.ProgressionEnemyRarityNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionEnemyLevel", "NPCs - Ultimate", "Minimum level difference (player minus enemy) to access ultimate quickhacks on NPCs. (-51 = Disabled)", -51, 50, 1, settings.ProgressionEnemyLevelNPCsUltimate, -51, function(state)
-        settings.ProgressionEnemyLevelNPCsUltimate = state
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Ultimate", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsUltimate, 1, function(state)
+        settings.ProgressionEnemyRarityNPCsUltimate = state
         SaveSettings()
     end)
 end
 
-function SaveSettings() 
+function ApplyBreachUnconsciousActionChoice()
+    local map = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
+    local idx = settings.BreachUnconsciousActionChoice or 3
+    if map[idx] == nil then idx = 3 end
+    TweakDB:SetFlat("Interactions.BreachUnconsciousOfficer.action", map[idx])
+end
+
+function SaveSettings()
 	local validJson, contents = pcall(function() return json.encode(settings) end)
-	
+
 	if validJson and contents ~= nil then
 		local updatedFile = io.open("settings.json", "w+")
 		updatedFile:write(contents)
@@ -273,12 +301,12 @@ function SaveSettings()
 	end
 end
 
-function LoadSettings() 
+function LoadSettings()
 	local file = io.open("settings.json", "r")
 	if file ~= nil then
 		local contents = file:read("*a")
 		local validJson, savedState = pcall(function() return json.decode(contents) end)
-		
+
 		if validJson then
 			file:close();
 			for key, _ in pairs(settings) do
@@ -323,11 +351,11 @@ function OverrideConfigFunctions()
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionIntelligenceNPCsCombat;", function() return settings.ProgressionIntelligenceNPCsCombat end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionIntelligenceNPCsControl;", function() return settings.ProgressionIntelligenceNPCsControl end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionIntelligenceNPCsUltimate;", function() return settings.ProgressionIntelligenceNPCsUltimate end)
-    -- Progression - Enemy Level
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyLevelNPCsCovert;", function() return settings.ProgressionEnemyLevelNPCsCovert end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyLevelNPCsCombat;", function() return settings.ProgressionEnemyLevelNPCsCombat end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyLevelNPCsControl;", function() return settings.ProgressionEnemyLevelNPCsControl end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyLevelNPCsUltimate;", function() return settings.ProgressionEnemyLevelNPCsUltimate end)
+    -- Progression - Enemy Rarity
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsCovert;", function() return settings.ProgressionEnemyRarityNPCsCovert end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsCombat;", function() return settings.ProgressionEnemyRarityNPCsCombat end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsControl;", function() return settings.ProgressionEnemyRarityNPCsControl end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsUltimate;", function() return settings.ProgressionEnemyRarityNPCsUltimate end)
     -- Progression - Always Unlocked
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysBasicDevices;", function() return settings.ProgressionAlwaysBasicDevices end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysCameras;", function() return settings.ProgressionAlwaysCameras end)

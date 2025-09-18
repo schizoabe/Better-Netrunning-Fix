@@ -376,10 +376,10 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
   let attiudeTowardsPlayer: EAIAttitude = this.GetOwnerEntity().GetAttitudeTowards(GetPlayer(this.GetGameInstance()));
   let isPuppetActive: Bool = ScriptedPuppet.IsActive(this.GetOwnerEntity());
   let instigator: wref<GameObject> = Deref(context).processInitiatorObject;
-  let allowCovert: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyLevelNPCsCovert());
-  let allowCombat: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsCombat(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCombat(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCombat(), BetterNetrunningSettings.ProgressionEnemyLevelNPCsCombat());
-  let allowControl: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsControl(), BetterNetrunningSettings.ProgressionCyberdeckNPCsControl(), BetterNetrunningSettings.ProgressionIntelligenceNPCsControl(), BetterNetrunningSettings.ProgressionEnemyLevelNPCsControl());
-  let allowUltimate: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsUltimate(), BetterNetrunningSettings.ProgressionCyberdeckNPCsUltimate(), BetterNetrunningSettings.ProgressionIntelligenceNPCsUltimate(), BetterNetrunningSettings.ProgressionEnemyLevelNPCsUltimate());
+  let allowCovert: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCovert());
+  let allowCombat: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsCombat(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCombat(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCombat(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCombat());
+  let allowControl: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsControl(), BetterNetrunningSettings.ProgressionCyberdeckNPCsControl(), BetterNetrunningSettings.ProgressionIntelligenceNPCsControl(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsControl());
+  let allowUltimate: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.ProgressionAlwaysNPCsUltimate(), BetterNetrunningSettings.ProgressionCyberdeckNPCsUltimate(), BetterNetrunningSettings.ProgressionIntelligenceNPCsUltimate(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsUltimate());
   let allowPing: Bool = (BetterNetrunningSettings.AlwaysAllowPing() || allowCovert);
   let allowWhistle: Bool = (BetterNetrunningSettings.AlwaysAllowWhistle() || allowCovert);
   let i: Int32 = 0;
@@ -895,36 +895,79 @@ public func IntelligenceConditionEnabled(value: Int32) -> Bool {
   return value > 3;
 }
 
-public func EnemyLevelConditionMet(gameInstance: GameInstance, enemy: wref<Entity>, value: Int32) -> Bool {
-  let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(gameInstance);
-  let playerLevel: Int32 = Cast(statsSystem.GetStatValue(Cast(GetPlayer(gameInstance).GetEntityID()), gamedataStatType.Level));
-  let enemyLevel: Int32 = Cast(statsSystem.GetStatValue(Cast(enemy.GetEntityID()), gamedataStatType.Level));
-  let levelDifference: Int32 = playerLevel - enemyLevel;
-  return levelDifference >= value;
+public func NPCRarityToRank(rarity: gamedataNPCRarity) -> Int32 {
+  switch rarity {
+    case gamedataNPCRarity.Trash:
+      return 1;
+    case gamedataNPCRarity.Weak:
+      return 2;
+    case gamedataNPCRarity.Normal:
+      return 3;
+    case gamedataNPCRarity.Rare:
+      return 4;
+    case gamedataNPCRarity.Officer:
+      return 5;
+    case gamedataNPCRarity.Elite:
+      return 6;
+    case gamedataNPCRarity.Boss:
+      return 7;
+    case gamedataNPCRarity.MaxTac:
+      return 8;
+  }
+  return 0;
 }
 
-public func EnemyLevelConditionEnabled(value: Int32) -> Bool {
-  return value > -51;
+public func EnemyRarityRankFromConfigValue(value: Int32) -> Int32 {
+  // 1: Disabled, 2: Trash, 3: Weak, 4: Normal, 5: Rare, 6: Officer, 7: Elite, 8: Boss, 9: MaxTac
+  switch value {
+    case 2: return 1; // Trash
+    case 3: return 2; // Weak
+    case 4: return 3; // Normal
+    case 5: return 4; // Rare
+    case 6: return 5; // Officer
+    case 7: return 6; // Elite
+    case 8: return 7; // Boss
+    case 9: return 8; // MaxTac
+  }
+  return 0; // Disabled or invalid
 }
 
-public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32, enemyLevelValue: Int32) -> Bool {
+public func EnemyRarityConditionMet(gameInstance: GameInstance, enemy: wref<Entity>, value: Int32) -> Bool {
+  let puppet: wref<ScriptedPuppet> = enemy as ScriptedPuppet;
+  if !IsDefined(puppet) {
+    return false;
+  }
+  let maxRank: Int32 = EnemyRarityRankFromConfigValue(value);
+  if maxRank <= 0 {
+    return false;
+  }
+  let rarity: gamedataNPCRarity = puppet.GetNPCRarity();
+  // Unlock when enemy rarity rank is less than or equal to configured rank (inclusive)
+  return NPCRarityToRank(rarity) <= maxRank;
+}
+
+public func EnemyRarityConditionEnabled(value: Int32) -> Bool {
+  return value > 1;
+}
+
+public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32, enemyRarityValue: Int32) -> Bool {
   if alwaysAllow {
     return true;
   }
   let useConditionCyberdeck: Bool = CyberdeckConditionEnabled(cyberdeckValue);
   let useConditionIntelligence: Bool = IntelligenceConditionEnabled(intelligenceValue);
-  let useConditionEnemyLevel: Bool = EnemyLevelConditionEnabled(enemyLevelValue);
-  if !useConditionCyberdeck && !useConditionIntelligence && !useConditionEnemyLevel {
+  let useConditionEnemyRarity: Bool = EnemyRarityConditionEnabled(enemyRarityValue);
+  if !useConditionCyberdeck && !useConditionIntelligence && !useConditionEnemyRarity {
     return false;
   }
   let requireAll: Bool = BetterNetrunningSettings.ProgressionRequireAll();
   let conditionCyberdeck: Bool = CyberdeckConditionMet(gameInstance, cyberdeckValue);
   let conditionIntelligence: Bool = IntelligenceConditionMet(gameInstance, intelligenceValue);
-  let conditionEnemyLevel: Bool = EnemyLevelConditionMet(gameInstance, enemy, enemyLevelValue);
+  let conditionEnemyRarity: Bool = EnemyRarityConditionMet(gameInstance, enemy, enemyRarityValue);
   if requireAll {
-    return (!useConditionCyberdeck || conditionCyberdeck) && (!useConditionIntelligence || conditionIntelligence) && (!useConditionEnemyLevel || conditionEnemyLevel);
+    return (!useConditionCyberdeck || conditionCyberdeck) && (!useConditionIntelligence || conditionIntelligence) && (!useConditionEnemyRarity || conditionEnemyRarity);
   } else {
-    return (useConditionCyberdeck && conditionCyberdeck) || (useConditionIntelligence && conditionIntelligence) || (useConditionEnemyLevel && conditionEnemyLevel);
+    return (useConditionCyberdeck && conditionCyberdeck) || (useConditionIntelligence && conditionIntelligence) || (useConditionEnemyRarity && conditionEnemyRarity);
   }
 }
 

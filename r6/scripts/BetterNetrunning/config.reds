@@ -68,10 +68,11 @@ public class BetterNetrunningSettings {
     public static func ProgressionIntelligenceNPCsControl() -> Int32 { return 3; }
     public static func ProgressionIntelligenceNPCsUltimate() -> Int32 { return 3; }
 
-    public static func ProgressionEnemyLevelNPCsCovert() -> Int32 { return -51; }
-    public static func ProgressionEnemyLevelNPCsCombat() -> Int32 { return -51; }
-    public static func ProgressionEnemyLevelNPCsControl() -> Int32 { return -51; }
-    public static func ProgressionEnemyLevelNPCsUltimate() -> Int32 { return -51; }
+    // 1: Disabled, 2: Trash+, 3: Weak+, 4: Normal+, 5: Rare+, 6: Officer+, 7: Elite+, 8: Boss+, 9: MaxTac
+    public static func ProgressionEnemyRarityNPCsCovert() -> Int32 { return 1; }
+    public static func ProgressionEnemyRarityNPCsCombat() -> Int32 { return 1; }
+    public static func ProgressionEnemyRarityNPCsControl() -> Int32 { return 1; }
+    public static func ProgressionEnemyRarityNPCsUltimate() -> Int32 { return 1; }
 
     public static func ProgressionAlwaysBasicDevices() -> Bool { return false; }
     public static func ProgressionAlwaysCameras() -> Bool { return false; }
