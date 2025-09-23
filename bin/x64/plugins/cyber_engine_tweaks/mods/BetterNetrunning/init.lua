@@ -117,13 +117,8 @@ function BuildSettingsMenu(nativeSettings)
 
     -- Controls
     local breachActionChoices = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
-    nativeSettings.addSelectorString(
-        "/BetterNetrunning/Controls",
-        "Unconscious Breach Action",
-        "Select which Interaction Choice triggers the Unconscious Breach. The game maps Choice1..4 to the correct key/button for keyboard and gamepad.",
-        breachActionChoices,
-        settings.BreachUnconsciousActionChoice,
-        3,
+    nativeSettings.addSelectorString("/BetterNetrunning/Controls", "Unconscious Breach Action", "Select which Interaction Choice triggers the Unconscious Breach. The game maps Choice1 - 4 to the correct key/button for keyboard and gamepad.",
+        breachActionChoices, settings.BreachUnconsciousActionChoice, 3,
         function(state)
             settings.BreachUnconsciousActionChoice = state
             ApplyBreachUnconsciousActionChoice()
