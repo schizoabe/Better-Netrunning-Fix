@@ -1,4 +1,6 @@
 local settings = {
+    -- Controls
+    BreachingHotkey = 3,
     -- Breaching
     EnableClassicMode = false,
     AllowBreachUnconscious = true,
@@ -9,8 +11,6 @@ local settings = {
     AlwaysAllowPing = true,
     AlwaysAllowWhistle = false,
     AlwaysAllowDistract = false,
-    -- Controls
-    BreachUnconsciousActionChoice = 3, -- 1..4 maps to Choice1..Choice4
     -- Access Points
     UnlockIfNoAccessPoint = true,
     DisableDatamineOneTwo = false,
@@ -34,11 +34,10 @@ local settings = {
     ProgressionIntelligenceNPCsControl = 3,
     ProgressionIntelligenceNPCsUltimate = 3,
     -- Progression - Enemy Rarity
-    -- 1: Disabled, 2: Trash, 3: Weak, 4: Normal, 5: Rare, 6: Officer, 7: Elite, 8: Boss, 9: MaxTac
-    ProgressionEnemyRarityNPCsCovert = 1,
-    ProgressionEnemyRarityNPCsCombat = 1,
-    ProgressionEnemyRarityNPCsControl = 1,
-    ProgressionEnemyRarityNPCsUltimate = 1,
+    ProgressionEnemyRarityNPCsCovert = 8,
+    ProgressionEnemyRarityNPCsCombat = 8,
+    ProgressionEnemyRarityNPCsControl = 8,
+    ProgressionEnemyRarityNPCsUltimate = 8,
     -- Progression - Always Unlocked
     ProgressionAlwaysBasicDevices = false,
     ProgressionAlwaysCameras = false,
@@ -75,7 +74,7 @@ function SetupUnconsciousBreachAction()
     TweakDB:SetFlat("Takedown.BreachUnconsciousOfficer.actionName", "RemoteBreach")
 	TweakDB:SetFlat("Takedown.BreachUnconsciousOfficer.activationTime", {})
 
-    ApplyBreachUnconsciousActionChoice()
+    ApplyBreachingHotkey()
 end
 
 function SetupAccessProgram(interactionName, actionName, caption, description, icon, complexity)
@@ -95,195 +94,199 @@ end
 function BuildSettingsMenu(nativeSettings)
     nativeSettings.addTab("/BetterNetrunning", "Better Netrunning")
 
-    nativeSettings.addSubcategory("/BetterNetrunning/Breaching", "Breaching")
-    nativeSettings.addSubcategory("/BetterNetrunning/AccessPoints", "Access Points")
-    nativeSettings.addSubcategory("/BetterNetrunning/Controls", "Controls")
-    nativeSettings.addSubcategory("/BetterNetrunning/RemovedQuickhacks", "Removed Quickhacks")
-    nativeSettings.addSubcategory("/BetterNetrunning/UnlockedQuickhacks", "Always Unlocked Quickhacks")
-    nativeSettings.addSubcategory("/BetterNetrunning/Progression", "Progression")
-    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionCyberdeck", "Progression - Cyberdeck Quality")
-    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionIntelligence", "Progression - Intelligence")
-    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionEnemyRarity", "Progression - Enemy Rarity")
-
-    -- Breaching
-    nativeSettings.addSwitch("/BetterNetrunning/Breaching", "Enable Classic Mode", "If true, the entire network can be breached by uploading any daemon. This disables the subnet system, along with the corresponding breach daemons.", settings.EnableClassicMode, false, function(state)
-        settings.EnableClassicMode = state
-        SaveSettings()
-    end)
-    nativeSettings.addSwitch("/BetterNetrunning/Breaching", "Allow Breaching Unconscious NPCs", "If true, you can perform a network breach on any unconscious NPC connected to a network.", settings.AllowBreachUnconscious, true, function(state)
-        settings.AllowBreachUnconscious = state
-        SaveSettings()
-    end)
+    nativeSettings.addSubcategory("/BetterNetrunning/Controls", GetLocKey("Category-Controls"))
+    nativeSettings.addSubcategory("/BetterNetrunning/Breaching", GetLocKey("Category-Breaching"))
+    nativeSettings.addSubcategory("/BetterNetrunning/AccessPoints", GetLocKey("Category-AccessPoints"))
+    nativeSettings.addSubcategory("/BetterNetrunning/RemovedQuickhacks", GetLocKey("Category-RemovedQuickhacks"))
+    nativeSettings.addSubcategory("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("Category-UnlockedQuickhacks"))
+    nativeSettings.addSubcategory("/BetterNetrunning/Progression", GetLocKey("Category-Progression"))
+    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("Category-BetterNetrunning-ProgressionCyberdeck"))
+    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionIntelligence", GetLocKey("Category-BetterNetrunning-ProgressionIntelligence"))
+    nativeSettings.addSubcategory("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("Category-BetterNetrunning-ProgressionEnemyRarity"))
 
     -- Controls
-    local breachActionChoices = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
-    nativeSettings.addSelectorString("/BetterNetrunning/Controls", "Unconscious Breach Action", "Select which Interaction Choice triggers the Unconscious Breach. The game maps Choice1 - 4 to the correct key/button for keyboard and gamepad.",
-        breachActionChoices, settings.BreachUnconsciousActionChoice, 3,
+    local breachingHotkey = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
+    nativeSettings.addSelectorString("/BetterNetrunning/Controls", GetLocKey("DisplayName-BetterNetrunning-BreachingHotkey"), GetLocKey("Description-BetterNetrunning-BreachingHotkey"),
+        breachingHotkey, settings.BreachingHotkey, 3,
         function(state)
-            settings.BreachUnconsciousActionChoice = state
-            ApplyBreachUnconsciousActionChoice()
+            settings.BreachingHotkey = state
+            ApplyBreachingHotkey()
             SaveSettings()
         end
     )
 
+    -- Breaching
+    nativeSettings.addSwitch("/BetterNetrunning/Breaching", GetLocKey("DisplayName-BetterNetrunning-EnableClassicMode"), GetLocKey("Description-BetterNetrunning-EnableClassicMode"), settings.EnableClassicMode, false, function(state)
+        settings.EnableClassicMode = state
+        SaveSettings()
+    end)
+    nativeSettings.addSwitch("/BetterNetrunning/Breaching", GetLocKey("DisplayName-BetterNetrunning-AllowBreachingUnconsciousNPCs"), GetLocKey("Description-BetterNetrunning-AllowBreachingUnconsciousNPCs"), settings.AllowBreachUnconscious, true, function(state)
+        settings.AllowBreachUnconscious = state
+        SaveSettings()
+    end)
+
     -- Access Points
-    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", "Unlock Networks With No Access Points", "If true, all quickhacks are automatically allowed if there are no access points on the network.", settings.UnlockIfNoAccessPoint, true, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", GetLocKey("DisplayName-BetterNetrunning-UnlockIfNoAccessPoint"), GetLocKey("Description-BetterNetrunning-UnlockIfNoAccessPoint"), settings.UnlockIfNoAccessPoint, true, function(state)
         settings.UnlockIfNoAccessPoint = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", "Disable Datamine V1 and V2", "If true, the Datamine V1 and V2 daemons will not appear while breaching access points (only V3 will remain). This helps to reduce clutter from having too many daemons listed, however it also reduces the amount of eddies and quickhack components you can get from each access point.", settings.DisableDatamineOneTwo, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", GetLocKey("DisplayName-BetterNetrunning-DisableDatamineOneTwo"), GetLocKey("Description-BetterNetrunning-DisableDatamineOneTwo"), settings.DisableDatamineOneTwo, false, function(state)
         settings.DisableDatamineOneTwo = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", "Allow All Daemons on Access Points", "If true, all daemons can be uploaded on access points, rather than only Datamine. Very buggy, enable at your own risk.", settings.AllowAllDaemonsOnAccessPoints, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", GetLocKey("DisplayName-BetterNetrunning-AllowAllDaemonsOnAccessPoints"), GetLocKey("Description-BetterNetrunning-AllowAllDaemonsOnAccessPoints"), settings.AllowAllDaemonsOnAccessPoints, false, function(state)
         settings.AllowAllDaemonsOnAccessPoints = state
         SaveSettings()
     end)
 
     -- Removed Quickhacks
-    nativeSettings.addSwitch("/BetterNetrunning/RemovedQuickhacks", "Remove Camera Disable Quickhack", "If true, the enable/disable quickhack will NOT be available on cameras.", settings.BlockCameraDisable, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/RemovedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-BlockCameraDisableQuickhack"), GetLocKey("Description-BetterNetrunning-BlockCameraDisableQuickhack"), settings.BlockCameraDisable, false, function(state)
         settings.BlockCameraDisable = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/RemovedQuickhacks", "Remove Turret Disable Quickhack", "If true, the enable/disable quickhack will NOT be available on turrets.", settings.BlockTurretDisable, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/RemovedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-BlockTurretDisableQuickhack"), GetLocKey("Description-BetterNetrunning-BlockTurretDisableQuickhack"), settings.BlockTurretDisable, false, function(state)
         settings.BlockTurretDisable = state
         SaveSettings()
     end)
 
     -- Always Unlocked Quickhacks
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Ping", "If true, the Ping quickhack is always available on unbreached networks.", settings.AlwaysAllowPing, true, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysAllowPing"), GetLocKey("Description-BetterNetrunning-AlwaysAllowPing"), settings.AlwaysAllowPing, true, function(state)
         settings.AlwaysAllowPing = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Whistle", "If true, the Whistle quickhack is always available on unbreached networks.", settings.AlwaysAllowWhistle, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysAllowWhistle"), GetLocKey("Description-BetterNetrunning-AlwaysAllowWhistle"), settings.AlwaysAllowWhistle, false, function(state)
         settings.AlwaysAllowWhistle = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Distract Enemies", "If true, the Distract Enemies quickhack is always available on unbreached networks.", settings.AlwaysAllowDistract, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysAllowDistract"), GetLocKey("Description-BetterNetrunning-AlwaysAllowDistract"), settings.AlwaysAllowDistract, false, function(state)
         settings.AlwaysAllowDistract = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Basic Devices", "If true, basic device quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysBasicDevices, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysBasicDevices"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysBasicDevices"), settings.ProgressionAlwaysBasicDevices, false, function(state)
         settings.ProgressionAlwaysBasicDevices = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Cameras", "If true, camera quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysCameras, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysCameras"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysCameras"), settings.ProgressionAlwaysCameras, false, function(state)
         settings.ProgressionAlwaysCameras = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "Turrets", "If true, turret quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysTurrets, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysTurrets"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysTurrets"), settings.ProgressionAlwaysTurrets, false, function(state)
         settings.ProgressionAlwaysTurrets = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "NPCs - Covert", "If true, covert NPC quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysNPCsCovert, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsCovert"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsCovert"), settings.ProgressionAlwaysNPCsCovert, false, function(state)
         settings.ProgressionAlwaysNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "NPCs - Combat", "If true, combat NPC quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysNPCsCombat, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsCombat"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsCombat"), settings.ProgressionAlwaysNPCsCombat, false, function(state)
         settings.ProgressionAlwaysNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "NPCs - Control", "If true, control NPC quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysNPCsControl, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsControl"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsControl"), settings.ProgressionAlwaysNPCsControl, false, function(state)
         settings.ProgressionAlwaysNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", "NPCs - Ultimate", "If true, ultimate NPC quickhacks are always available on unbreached networks.", settings.ProgressionAlwaysNPCsUltimate, false, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsUltimate"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsUltimate"), settings.ProgressionAlwaysNPCsUltimate, false, function(state)
         settings.ProgressionAlwaysNPCsUltimate = state
         SaveSettings()
     end)
 
     -- Progression
-    nativeSettings.addSwitch("/BetterNetrunning/Progression", "Require All", "If true, all progression categories (that are not disabled) must be met to unlock a type of hack. If false, at least one must be met.", settings.ProgressionRequireAll, true, function(state)
+    nativeSettings.addSwitch("/BetterNetrunning/Progression", GetLocKey("DisplayName-BetterNetrunning-ProgressionRequireAll"), GetLocKey("Description-BetterNetrunning-ProgressionRequireAll"), settings.ProgressionRequireAll, true, function(state)
         settings.ProgressionRequireAll = state
         SaveSettings()
     end)
 
     -- Progression - Cyberdeck
-    local cyberdeckQualityOptions = {[1] = "Disabled", [2] = "Tier 1+", [3] = "Tier 2", [4] = "Tier 2+", [5] = "Tier 3", [6] = "Tier 3+", [7] = "Tier 4", [8] = "Tier 4+", [9] = "Tier 5", [10] = "Tier 5+", [11] = "Tier 5++"}
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "Basic Devices", "Minimum cyberdeck quality to access quickhacks on basic devices (no cameras or turrets).", cyberdeckQualityOptions, settings.ProgressionCyberdeckBasicDevices, 1, function(state)
+    local cyberdeckQualityOptions = {[1] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-Common"), [2] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-CommonPlus"), [3] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-Uncommon"), [4] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-UncommonPlus"), [5] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-Rare"), [6] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-RarePlus"), [7] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-Epic"), [8] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-EpicPlus"), [9] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-Legendary"), [10] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-LegendaryPlus"), [11] = GetLocKey("DisplayValues-BetterNetrunning-cyberdeckQuality-LegendaryPlusPlus")}
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckBasicDevices"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckBasicDevices"), cyberdeckQualityOptions, settings.ProgressionCyberdeckBasicDevices, 1, function(state)
         settings.ProgressionCyberdeckBasicDevices = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "Cameras", "Minimum cyberdeck quality to access quickhacks on cameras.", cyberdeckQualityOptions, settings.ProgressionCyberdeckCameras, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckCameras"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckCameras"), cyberdeckQualityOptions, settings.ProgressionCyberdeckCameras, 1, function(state)
         settings.ProgressionCyberdeckCameras = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "Turrets", "Minimum cyberdeck quality to access quickhacks on turrets.", cyberdeckQualityOptions, settings.ProgressionCyberdeckTurrets, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckTurrets"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckTurrets"), cyberdeckQualityOptions, settings.ProgressionCyberdeckTurrets, 1, function(state)
         settings.ProgressionCyberdeckTurrets = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "NPCs - Covert", "Minimum cyberdeck quality to access covert quickhacks on NPCs.", cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsCovert, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckNPCsCovert"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckNPCsCovert"), cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsCovert, 1, function(state)
         settings.ProgressionCyberdeckNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "NPCs - Combat", "Minimum cyberdeck quality to access combat quickhacks on NPCs.", cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsCombat, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckNPCsCombat"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckNPCsCombat"), cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsCombat, 1, function(state)
         settings.ProgressionCyberdeckNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "NPCs - Control", "Minimum cyberdeck quality to access control quickhacks on NPCs.", cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsControl, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckNPCsControl"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckNPCsControl"), cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsControl, 1, function(state)
         settings.ProgressionCyberdeckNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", "NPCs - Ultimate", "Minimum cyberdeck quality to access ultimate quickhacks on NPCs.", cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsUltimate, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("DisplayName-BetterNetrunning-ProgressionCyberdeckNPCsUltimate"), GetLocKey("Description-BetterNetrunning-ProgressionCyberdeckNPCsUltimate"), cyberdeckQualityOptions, settings.ProgressionCyberdeckNPCsUltimate, 1, function(state)
         settings.ProgressionCyberdeckNPCsUltimate = state
         SaveSettings()
     end)
 
     -- Progression - Intelligence
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "Basic Devices", "Minimum intelligence to access quickhacks on basic devices (no cameras or turrets). (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceBasicDevices, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceBasicDevices"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceBasicDevices"), 3, 20, 1, settings.ProgressionIntelligenceBasicDevices, 3, function(state)
         settings.ProgressionIntelligenceBasicDevices = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "Cameras", "Minimum intelligence to access quickhacks on cameras. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceCameras, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceCameras"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceCameras"), 3, 20, 1, settings.ProgressionIntelligenceCameras, 3, function(state)
         settings.ProgressionIntelligenceCameras = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "Turrets", "Minimum intelligence to access quickhacks on turrets. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceTurrets, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceTurrets"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceTurrets"), 3, 20, 1, settings.ProgressionIntelligenceTurrets, 3, function(state)
         settings.ProgressionIntelligenceTurrets = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "NPCs - Covert", "Minimum intelligence to access covert quickhacks on NPCs. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceNPCsCovert, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceNPCsCovert"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceNPCsCovert"), 3, 20, 1, settings.ProgressionIntelligenceNPCsCovert, 3, function(state)
         settings.ProgressionIntelligenceNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "NPCs - Combat", "Minimum intelligence to access combat quickhacks on NPCs. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceNPCsCombat, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceNPCsCombat"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceNPCsCombat"), 3, 20, 1, settings.ProgressionIntelligenceNPCsCombat, 3, function(state)
         settings.ProgressionIntelligenceNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "NPCs - Control", "Minimum intelligence to access control quickhacks on NPCs. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceNPCsControl, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceNPCsControl"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceNPCsControl"), 3, 20, 1, settings.ProgressionIntelligenceNPCsControl, 3, function(state)
         settings.ProgressionIntelligenceNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", "NPCs - Ultimate", "Minimum intelligence to access ultimate quickhacks on NPCs. (3 = Disabled)", 3, 20, 1, settings.ProgressionIntelligenceNPCsUltimate, 3, function(state)
+    nativeSettings.addRangeInt("/BetterNetrunning/ProgressionIntelligence", GetLocKey("DisplayName-BetterNetrunning-ProgressionIntelligenceNPCsUltimate"), GetLocKey("Description-BetterNetrunning-ProgressionIntelligenceNPCsUltimate"), 3, 20, 1, settings.ProgressionIntelligenceNPCsUltimate, 3, function(state)
         settings.ProgressionIntelligenceNPCsUltimate = state
         SaveSettings()
     end)
 
     -- Progression - Enemy Rarity
-    local enemyRarityOptions = {[1] = "Disabled", [2] = "Trash", [3] = "Weak", [4] = "Normal", [5] = "Rare", [6] = "Officer", [7] = "Elite", [8] = "Boss", [9] = "MaxTac"}
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Covert", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCovert, 1, function(state)
+    local enemyRarityOptions = {[1] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Trash"), [2] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Weak"), [3] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Normal"), [4] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Rare"), [5] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Officer"), [6] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Elite"), [7] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-Boss"), [8] = GetLocKey("DisplayValues-BetterNetrunning-NPCRarity-MaxTac")}
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("DisplayName-BetterNetrunning-ProgressionEnemyRarityNPCsCovert"), GetLocKey("Description-BetterNetrunning-ProgressionEnemyRarityNPCsCovert"), enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCovert, 8, function(state)
         settings.ProgressionEnemyRarityNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Combat", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCombat, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("DisplayName-BetterNetrunning-ProgressionEnemyRarityNPCsCombat"), GetLocKey("Description-BetterNetrunning-ProgressionEnemyRarityNPCsCombat"), enemyRarityOptions, settings.ProgressionEnemyRarityNPCsCombat, 8, function(state)
         settings.ProgressionEnemyRarityNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Control", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsControl, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("DisplayName-BetterNetrunning-ProgressionEnemyRarityNPCsControl"), GetLocKey("Description-BetterNetrunning-ProgressionEnemyRarityNPCsControl"), enemyRarityOptions, settings.ProgressionEnemyRarityNPCsControl, 8, function(state)
         settings.ProgressionEnemyRarityNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", "NPCs - Ultimate", "Unlock quickhacks for enemies at or below this rarity (inclusive).", enemyRarityOptions, settings.ProgressionEnemyRarityNPCsUltimate, 1, function(state)
+    nativeSettings.addSelectorString("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("DisplayName-BetterNetrunning-ProgressionEnemyRarityNPCsUltimate"), GetLocKey("Description-BetterNetrunning-ProgressionEnemyRarityNPCsUltimate"), enemyRarityOptions, settings.ProgressionEnemyRarityNPCsUltimate, 8, function(state)
         settings.ProgressionEnemyRarityNPCsUltimate = state
         SaveSettings()
     end)
 end
 
-function ApplyBreachUnconsciousActionChoice()
+function ApplyBreachingHotkey()
     local map = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
-    local idx = settings.BreachUnconsciousActionChoice or 3
+    local idx = settings.BreachingHotkey or 3
     if map[idx] == nil then idx = 3 end
     TweakDB:SetFlat("Interactions.BreachUnconsciousOfficer.action", map[idx])
+end
+
+function GetLocKey(key)
+    return "LocKey#" .. tostring(LocKey(key).hash):gsub("ULL$", "")
 end
 
 function SaveSettings()
@@ -314,6 +317,8 @@ function LoadSettings()
 end
 
 function OverrideConfigFunctions()
+    -- Controls
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "BreachingHotkey;", function() return settings.BreachingHotkey end)
     -- Breaching
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "EnableClassicMode;", function() return settings.EnableClassicMode end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "AllowBreachingUnconsciousNPCs;", function() return settings.AllowBreachUnconscious end)

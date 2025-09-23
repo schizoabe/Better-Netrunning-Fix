@@ -533,6 +533,7 @@ public final func IsConnectedToPhysicalAccessPoint() -> Bool {
   let apControllers: array<ref<AccessPointControllerPS>> = sharedGameplayPS.GetAccessPoints();
   return ArraySize(apControllers) > 0;
 
+  // Original method that checks for actual access points instead of just any AP controller
   // for currentAPController in apControllers {
   //   let children: array<ref<DeviceComponentPS>>;
   //   currentAPController.GetChildren(children);
@@ -917,37 +918,18 @@ public func NPCRarityToRank(rarity: gamedataNPCRarity) -> Int32 {
   return 0;
 }
 
-public func EnemyRarityRankFromConfigValue(value: Int32) -> Int32 {
-  // 1: Disabled, 2: Trash, 3: Weak, 4: Normal, 5: Rare, 6: Officer, 7: Elite, 8: Boss, 9: MaxTac
-  switch value {
-    case 2: return 1; // Trash
-    case 3: return 2; // Weak
-    case 4: return 3; // Normal
-    case 5: return 4; // Rare
-    case 6: return 5; // Officer
-    case 7: return 6; // Elite
-    case 8: return 7; // Boss
-    case 9: return 8; // MaxTac
-  }
-  return 0; // Disabled or invalid
-}
-
 public func EnemyRarityConditionMet(gameInstance: GameInstance, enemy: wref<Entity>, value: Int32) -> Bool {
   let puppet: wref<ScriptedPuppet> = enemy as ScriptedPuppet;
   if !IsDefined(puppet) {
     return false;
   }
-  let maxRank: Int32 = EnemyRarityRankFromConfigValue(value);
-  if maxRank <= 0 {
-    return false;
-  }
   let rarity: gamedataNPCRarity = puppet.GetNPCRarity();
   // Unlock when enemy rarity rank is less than or equal to configured rank (inclusive)
-  return NPCRarityToRank(rarity) <= maxRank;
+  return NPCRarityToRank(rarity) <= value;
 }
 
 public func EnemyRarityConditionEnabled(value: Int32) -> Bool {
-  return value > 1;
+  return value < 8;
 }
 
 public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>, alwaysAllow: Bool, cyberdeckValue: Int32, intelligenceValue: Int32, enemyRarityValue: Int32) -> Bool {

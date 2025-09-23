@@ -5,75 +5,26 @@ public class BetterNetrunningSettings {
     // !!! WARNING !!!
     // If using Native Settings UI, the values in this file will have no effect.
 
-    // ---- ENABLE CLASSIC MODE ----
-    // If true, the entire network can be breached by uploading any daemon. This disables the subnet system, along with the corresponding breach daemons.
+    // Controls
+    public static func BreachingHotkey() -> String { return "Choice3"; }
+
+    // Breaching
     public static func EnableClassicMode() -> Bool { return false; }
-
-    // ---- UNLOCK NETWORK IF NO ACCESS POINTS PRESENT ----
-    // If true, will allow all quickhacks automatically if there are no access points on the network.
-    public static func UnlockIfNoAccessPoint() -> Bool { return true; }
-
-    // ---- ALLOW BREACHING UNCONSCIOUS NPCS ----
-    // If true, you can perform a network breach on any unconscious NPC connected to a network.
     public static func AllowBreachingUnconsciousNPCs() -> Bool { return true; }
 
-    // ---- BLOCK CAMERA DISABLE QUICKHACK ----
-    // If true, the "enable/disable" quickhack will NOT be available on cameras.
-    public static func BlockCameraDisableQuickhack() -> Bool { return false; }
-
-    // ---- BLOCK TURRET DISABLE QUICKHACK ----
-    // If true, the "enable/disable" quickhack will NOT be available on turrets.
-    public static func BlockTurretDisableQuickhack() -> Bool { return false; }
-
-    // ---- ALWAYS ALLOW PING ----
-    // If true, the "ping" quickhack will be available on unbreached networks.
-    public static func AlwaysAllowPing() -> Bool { return true; }
-
-    // ---- ALWAYS ALLOW WHISTLE ----
-    // If true, the "whistle" quickhack will be available on unbreached networks.
-    public static func AlwaysAllowWhistle() -> Bool { return false; }
-
-    // ---- ALWAYS ALLOW DISTRACT ENEMIES ----
-    // If true, the "distract enemies" quickhack will be available on unbreached networks.
-    public static func AlwaysAllowDistract() -> Bool { return false; }
-
-    // ---- DISABLE DATAMINE DAEMON V1 AND V2 ----
-    // If true, the Datamine V1 and V2 daemons will not appear while breaching access points (only V3 will remain).
-    // This helps to reduce clutter from having too many daemons listed, however it also reduces
-    // the amount of eddies and quickhack components you can get from each access point.
+    // Access Points
+    public static func UnlockIfNoAccessPoint() -> Bool { return true; }
     public static func DisableDatamineOneTwo() -> Bool { return false; }
-
-    // ---- ALLOW ALL DAEMONS ON ACCESS POINTS ----
-    // If true, allows all daemons to be used on physical access points, rather than only Datamine.
-    // Disabled by default because there are issues with the way access points are set up that can cause daemons to work incorrectly.
-    // Enable at your own risk (not actually dangerous, just buggy).
     public static func AllowAllDaemonsOnAccessPoints() -> Bool { return false; }
 
-    public static func ProgressionRequireAll() -> Bool { return true; }
+    // Removed Quickhacks
+    public static func BlockCameraDisableQuickhack() -> Bool { return false; }
+    public static func BlockTurretDisableQuickhack() -> Bool { return false; }
 
-    // 1: Disabled, 2: Tier 1+, 3: Tier 2, 4: Tier 2+, 5: Tier 3, 6: Tier 3+, 7: Tier 4, 8: Tier 4+, 9: Tier 5, 10: Tier 5+, 11: Tier 5++
-    public static func ProgressionCyberdeckBasicDevices() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckCameras() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckTurrets() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckNPCsCovert() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckNPCsCombat() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckNPCsControl() -> Int32 { return 1; }
-    public static func ProgressionCyberdeckNPCsUltimate() -> Int32 { return 1; }
-
-    public static func ProgressionIntelligenceBasicDevices() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceCameras() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceTurrets() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceNPCsCovert() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceNPCsCombat() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceNPCsControl() -> Int32 { return 3; }
-    public static func ProgressionIntelligenceNPCsUltimate() -> Int32 { return 3; }
-
-    // 1: Disabled, 2: Trash+, 3: Weak+, 4: Normal+, 5: Rare+, 6: Officer+, 7: Elite+, 8: Boss+, 9: MaxTac
-    public static func ProgressionEnemyRarityNPCsCovert() -> Int32 { return 1; }
-    public static func ProgressionEnemyRarityNPCsCombat() -> Int32 { return 1; }
-    public static func ProgressionEnemyRarityNPCsControl() -> Int32 { return 1; }
-    public static func ProgressionEnemyRarityNPCsUltimate() -> Int32 { return 1; }
-
+    // Always Unlocked Quickhacks
+    public static func AlwaysAllowPing() -> Bool { return true; }
+    public static func AlwaysAllowWhistle() -> Bool { return false; }
+    public static func AlwaysAllowDistract() -> Bool { return false; }
     public static func ProgressionAlwaysBasicDevices() -> Bool { return false; }
     public static func ProgressionAlwaysCameras() -> Bool { return false; }
     public static func ProgressionAlwaysTurrets() -> Bool { return false; }
@@ -82,4 +33,30 @@ public class BetterNetrunningSettings {
     public static func ProgressionAlwaysNPCsControl() -> Bool { return false; }
     public static func ProgressionAlwaysNPCsUltimate() -> Bool { return false; }
 
+    // Progression
+    public static func ProgressionRequireAll() -> Bool { return true; }
+
+    // Progression - Cyberdeck
+    public static func ProgressionCyberdeckBasicDevices() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckCameras() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckTurrets() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckNPCsCovert() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckNPCsCombat() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckNPCsControl() -> Int32 { return 1; }
+    public static func ProgressionCyberdeckNPCsUltimate() -> Int32 { return 1; }
+
+    // Progression - Intelligence
+    public static func ProgressionIntelligenceBasicDevices() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceCameras() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceTurrets() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceNPCsCovert() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceNPCsCombat() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceNPCsControl() -> Int32 { return 3; }
+    public static func ProgressionIntelligenceNPCsUltimate() -> Int32 { return 3; }
+
+    // Progression - Enemy Rarity
+    public static func ProgressionEnemyRarityNPCsCovert() -> Int32 { return 8; }
+    public static func ProgressionEnemyRarityNPCsCombat() -> Int32 { return 8; }
+    public static func ProgressionEnemyRarityNPCsControl() -> Int32 { return 8; }
+    public static func ProgressionEnemyRarityNPCsUltimate() -> Int32 { return 8; }
 }

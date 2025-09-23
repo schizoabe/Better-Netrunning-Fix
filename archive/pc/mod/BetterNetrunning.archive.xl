@@ -1,3 +1,4 @@
 localization:
   onscreens:
     en-us: better-netrunning\localization\en-us.json
+    jp-jp: better-netrunning\localization\jp-jp.json
