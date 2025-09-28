@@ -371,7 +371,7 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
   let actionType: gamedataObjectActionType;
   let isRemote: Bool;
   let puppetAction: ref<PuppetAction>;
-  let isBreached: Bool = this.IsBreached();
+  // let isBreached: Bool = this.IsBreached(); // Unused variable
   let isQuickHackExposed: Bool = this.IsQuickHacksExposed();
   let attiudeTowardsPlayer: EAIAttitude = this.GetOwnerEntity().GetAttitudeTowards(GetPlayer(this.GetGameInstance()));
   let isPuppetActive: Bool = ScriptedPuppet.IsActive(this.GetOwnerEntity());
@@ -413,7 +413,8 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
           //if (puppetAction as AccessBreach) != null && isBreached {
           //  puppetAction.SetInactiveWithReason(!isBreached, "LocKey#27728");
           //} else {
-            if !isQuickHackExposed && !isBreached && !this.IsWhiteListedForHacks() &&
+            // if !isQuickHackExposed && !isBreached && !this.IsWhiteListedForHacks() &&
+            if !isQuickHackExposed && !this.IsWhiteListedForHacks() &&
               !(Equals(puppetAction.GetObjectActionRecord().HackCategory().EnumName(), n"CovertHack") && allowCovert) &&
               !(Equals(puppetAction.GetObjectActionRecord().HackCategory().EnumName(), n"DamageHack") && allowCombat) &&
               !(Equals(puppetAction.GetObjectActionRecord().HackCategory().EnumName(), n"ControlHack") && allowControl) &&
