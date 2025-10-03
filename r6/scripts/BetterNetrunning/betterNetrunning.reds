@@ -7,86 +7,157 @@ import BetterNetrunningConfig.*
  * Optionally allows access to all daemons through access points
  * Optionally removes Datamine V1 and V2 daemons from access points
  */
-@replaceMethod(MinigameGenerationRuleScalingPrograms)
+@wrapMethod(MinigameGenerationRuleScalingPrograms)
 public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgramData>>) -> Void {
-  let data: ConnectedClassTypes;
-  let i: Int32;
-  let miniGameActionRecord: wref<MinigameAction_Record>;
-  // let deviceHasBeenBreached: Bool; // Unused variable
-  let connectedToNetwork: Bool;
+  // Inject Better Netrunning specific programs into player's program list
   this.InjectBetterNetrunningPrograms(programs);
-  // Store the entity being breached in the minigame blackboard, for use in the access point logic
+  // Store the hacking target entity in minigame blackboard (used for access point logic)
   this.m_blackboardSystem.Get(GetAllBlackboardDefs().HackingMinigame).SetVariant(GetAllBlackboardDefs().HackingMinigame.Entity, ToVariant(this.m_entity));
+  // Execute original method (basic filtering)
+  wrappedMethod(programs);
+
+  // Apply Better Netrunning specific additional filtering
+  let connectedToNetwork: Bool;
+  let data: ConnectedClassTypes;
+
+  // Determine network connection status and get connected class types based on entity type
   if (this.m_entity as GameObject).IsPuppet() {
-    data = (this.m_entity as ScriptedPuppet).GetMasterConnectedClassTypes();
-    // deviceHasBeenBreached = false;
     connectedToNetwork = true;
-    //Log(NameToString((this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink().GetParentDevice().GetClassName()));
+    data = (this.m_entity as ScriptedPuppet).GetMasterConnectedClassTypes();
   } else {
-    data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
-    // deviceHasBeenBreached = (this.m_entity as Device).GetDevicePS().WasHackingMinigameSucceeded();
     connectedToNetwork = (this.m_entity as Device).GetDevicePS().IsConnectedToPhysicalAccessPoint();
-  };
-  i = ArraySize(Deref(programs)) - 1;
+    data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
+  }
+
+  // Process Better Netrunning specific filtering in reverse order
+  let i: Int32 = ArraySize(Deref(programs)) - 1;
   while i >= 0 {
-    miniGameActionRecord = TweakDBInterface.GetMinigameActionRecord(Deref(programs)[i].actionID);
-    if !IsNameValid(Deref(programs)[i].programName) || Equals(Deref(programs)[i].programName, n"None") {
+    let actionID: TweakDBID = Deref(programs)[i].actionID;
+    let miniGameActionRecord: wref<MinigameAction_Record> = TweakDBInterface.GetMinigameActionRecord(actionID);
+
+    // Check if program should be removed
+    if ShouldRemoveNetworkPrograms(actionID, connectedToNetwork)
+        || ShouldRemoveDeviceBackdoorPrograms(actionID, this.m_entity as GameObject)
+        || ShouldRemoveAccessPointPrograms(actionID, miniGameActionRecord, this.m_isRemoteBreach)
+        || ShouldRemoveNonNetrunnerPrograms(actionID, miniGameActionRecord, this.m_isRemoteBreach, this.m_entity as GameObject)
+        || ShouldRemoveDeviceTypePrograms(actionID, miniGameActionRecord, data)
+        || ShouldRemoveDataminePrograms(actionID) {
       ArrayErase(Deref(programs), i);
-    } else {
-      // Remove breaching programs when not connected to a network
-      if !connectedToNetwork &&
-        (Deref(programs)[i].actionID == t"MinigameAction.UnlockQuickhacks"
-      || Deref(programs)[i].actionID == t"MinigameAction.UnlockNPCQuickhacks"
-      || Deref(programs)[i].actionID == t"MinigameAction.UnlockCameraQuickhacks"
-      || Deref(programs)[i].actionID == t"MinigameAction.UnlockTurretQuickhacks") {
-        ArrayErase(Deref(programs), i);
-      } else {
-        // Device backdoor
-        if (IsDefined(this.m_entity as Device) && !IsDefined(this.m_entity as AccessPoint)) &&
-          (Deref(programs)[i].actionID == t"MinigameAction.NetworkDataMineLootAllMaster"
-        || Deref(programs)[i].actionID == t"MinigameAction.UnlockNPCQuickhacks"
-        || Deref(programs)[i].actionID == t"MinigameAction.UnlockTurretQuickhacks") {
-          ArrayErase(Deref(programs), i);
-        } else {
-          // Access point
-          if !BetterNetrunningSettings.AllowAllDaemonsOnAccessPoints() && !this.m_isRemoteBreach &&
-             NotEquals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.AccessPoint)
-          && Deref(programs)[i].actionID != t"MinigameAction.UnlockQuickhacks"
-          && Deref(programs)[i].actionID != t"MinigameAction.UnlockNPCQuickhacks"
-          && Deref(programs)[i].actionID != t"MinigameAction.UnlockCameraQuickhacks"
-          && Deref(programs)[i].actionID != t"MinigameAction.UnlockTurretQuickhacks" {
-            ArrayErase(Deref(programs), i);
-          } else {
-            // Non-netrunner NPC
-            if this.m_isRemoteBreach && !(IsDefined(this.m_entity as ScriptedPuppet) && (this.m_entity as ScriptedPuppet).IsNetrunnerPuppet()) &&
-              (Equals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.AccessPoint)
-            || Deref(programs)[i].actionID == t"MinigameAction.UnlockCameraQuickhacks"
-            || Deref(programs)[i].actionID == t"MinigameAction.UnlockTurretQuickhacks") {
-              ArrayErase(Deref(programs), i);
-            } else {
-              if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.CameraAccess) || Deref(programs)[i].actionID == t"MinigameAction.UnlockCameraQuickhacks") && !data.surveillanceCamera {
-                ArrayErase(Deref(programs), i);
-              } else {
-                if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.TurretAccess) || Deref(programs)[i].actionID == t"MinigameAction.UnlockTurretQuickhacks") && !data.securityTurret {
-                  ArrayErase(Deref(programs), i);
-                } else {
-                  if (Equals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.NPC) || Deref(programs)[i].actionID == t"MinigameAction.UnlockNPCQuickhacks") && !data.puppet {
-                    ArrayErase(Deref(programs), i);
-                  } else {
-                    // Disables lower-tier datamine daemons if disabled in the mod settings
-                    if BetterNetrunningSettings.DisableDatamineOneTwo() && (Equals(Deref(programs)[i].actionID, t"MinigameAction.NetworkDataMineLootAllAdvanced") || Equals(Deref(programs)[i].actionID, t"MinigameAction.NetworkDataMineLootAll")) {
-                      ArrayErase(Deref(programs), i);
-                    };
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    };
+    }
     i -= 1;
   };
+}
+
+// Check if breach programs should be removed when not connected to network
+public func ShouldRemoveNetworkPrograms(actionID: TweakDBID, connectedToNetwork: Bool) -> Bool {
+  if connectedToNetwork {
+    return false;
+  }
+  return IsUnlockQuickhackAction(actionID);
+}
+
+// Check if device backdoor related programs should be removed
+public func ShouldRemoveDeviceBackdoorPrograms(actionID: TweakDBID, entity: wref<GameObject>) -> Bool {
+  // Only applies to devices that are not access points
+  if !(IsDefined(entity as Device) && !IsDefined(entity as AccessPoint)) {
+    return false;
+  }
+  return actionID == t"MinigameAction.NetworkDataMineLootAllMaster"
+      || actionID == t"MinigameAction.UnlockNPCQuickhacks"
+      || actionID == t"MinigameAction.UnlockTurretQuickhacks";
+}
+
+// Check if access point related restrictions apply
+public func ShouldRemoveAccessPointPrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, isRemoteBreach: Bool) -> Bool {
+  // Skip if all daemons allowed on access points in settings, or if it's a remote breach
+  if BetterNetrunningSettings.AllowAllDaemonsOnAccessPoints() || isRemoteBreach {
+    return false;
+  }
+  // Remove if not an access point type daemon and not a basic unlock quickhack
+  return NotEquals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.AccessPoint)
+      && !IsUnlockQuickhackAction(actionID);
+}
+
+// Check if non-netrunner NPC related restrictions apply
+public func ShouldRemoveNonNetrunnerPrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, isRemoteBreach: Bool, entity: wref<GameObject>) -> Bool {
+  // Skip if not a remote breach on a non-netrunner NPC
+  if !IsRemoteNonNetrunner(isRemoteBreach, entity) {
+    return false;
+  }
+  // Check if DNR specific non-netrunner programs should be removed
+  if ShouldRemoveDNRNonNetrunnerPrograms(actionID) {
+    return true;
+  }
+  // Remove access point type daemons and camera/turret unlock programs
+  return Equals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.AccessPoint)
+      || actionID == t"MinigameAction.UnlockCameraQuickhacks"
+      || actionID == t"MinigameAction.UnlockTurretQuickhacks";
+}
+
+// Check if target is a remote breach on a non-netrunner NPC
+public func IsRemoteNonNetrunner(isRemoteBreach: Bool, entity: wref<GameObject>) -> Bool {
+  if !isRemoteBreach {
+    return false;
+  }
+  let puppet: wref<ScriptedPuppet> = entity as ScriptedPuppet;
+  return IsDefined(puppet) && !puppet.IsNetrunnerPuppet();
+}
+
+// Helper to check if action is an unlock quickhack type
+private func IsUnlockQuickhackAction(actionID: TweakDBID) -> Bool {
+  return actionID == t"MinigameAction.UnlockQuickhacks"
+      || actionID == t"MinigameAction.UnlockNPCQuickhacks"
+      || actionID == t"MinigameAction.UnlockCameraQuickhacks"
+      || actionID == t"MinigameAction.UnlockTurretQuickhacks";
+}
+
+// Check if programs should be excluded from non-netrunner NPCs when DNR (Daemon Netrunning Revamp) is installed
+@if(ModuleExists("DNR.Replace"))
+public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
+  return actionID == t"MinigameAction.RemoteCyberpsychosis"
+      || actionID == t"MinigameAction.Cyberpsychosis_AP"
+      || actionID == t"MinigameAction.RemoteSuicide"
+      || actionID == t"MinigameAction.Suicide_AP"
+      || actionID == t"MinigameAction.RemoteSystemReset"
+      || actionID == t"MinigameAction.SystemReset_AP"
+      || actionID == t"MinigameAction.RemoteDetonateGrenade"
+      || actionID == t"MinigameAction.DetonateGrenade_AP"
+      || actionID == t"MinigameAction.RemoteNetworkOverload"
+      || actionID == t"MinigameAction.NetworkOverload_AP"
+      || actionID == t"MinigameAction.RemoteNetworkContagion"
+      || actionID == t"MinigameAction.NetworkContagion_AP";
+}
+
+// Dummy implementation that always returns false when DNR is not installed
+@if(!ModuleExists("DNR.Replace"))
+public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
+  return false;
+}
+
+// Check if device type specific restrictions apply
+public func ShouldRemoveDeviceTypePrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, data: ConnectedClassTypes) -> Bool {
+  // Camera access related restrictions
+  if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.CameraAccess) || actionID == t"MinigameAction.UnlockCameraQuickhacks") && !data.surveillanceCamera {
+    return true;
+  }
+  // Turret access related restrictions
+  if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.TurretAccess) || actionID == t"MinigameAction.UnlockTurretQuickhacks") && !data.securityTurret {
+    return true;
+  }
+  // NPC related restrictions
+  if (Equals(miniGameActionRecord.Type().Type(), gamedataMinigameActionType.NPC) || actionID == t"MinigameAction.UnlockNPCQuickhacks") && !data.puppet {
+    return true;
+  }
+  return false;
+}
+
+// Check if low-level datamine programs should be removed
+public func ShouldRemoveDataminePrograms(actionID: TweakDBID) -> Bool {
+  if !BetterNetrunningSettings.DisableDatamineOneTwo() {
+    return false;
+  }
+  return Equals(actionID, t"MinigameAction.NetworkDataMineLootAllAdvanced")
+      || Equals(actionID, t"MinigameAction.NetworkDataMineLootAll");
 }
 
 /*
