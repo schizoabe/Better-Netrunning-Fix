@@ -25,13 +25,13 @@ public class BetterNetrunningSettings {
     public static func AlwaysAllowPing() -> Bool { return true; }
     public static func AlwaysAllowWhistle() -> Bool { return false; }
     public static func AlwaysAllowDistract() -> Bool { return false; }
-    public static func ProgressionAlwaysBasicDevices() -> Bool { return false; }
-    public static func ProgressionAlwaysCameras() -> Bool { return false; }
-    public static func ProgressionAlwaysTurrets() -> Bool { return false; }
-    public static func ProgressionAlwaysNPCsCovert() -> Bool { return false; }
-    public static func ProgressionAlwaysNPCsCombat() -> Bool { return false; }
-    public static func ProgressionAlwaysNPCsControl() -> Bool { return false; }
-    public static func ProgressionAlwaysNPCsUltimate() -> Bool { return false; }
+    public static func AlwaysBasicDevices() -> Bool { return false; }
+    public static func AlwaysCameras() -> Bool { return false; }
+    public static func AlwaysTurrets() -> Bool { return false; }
+    public static func AlwaysNPCsCovert() -> Bool { return false; }
+    public static func AlwaysNPCsCombat() -> Bool { return false; }
+    public static func AlwaysNPCsControl() -> Bool { return false; }
+    public static func AlwaysNPCsUltimate() -> Bool { return false; }
 
     // Progression
     public static func ProgressionRequireAll() -> Bool { return true; }
@@ -59,4 +59,7 @@ public class BetterNetrunningSettings {
     public static func ProgressionEnemyRarityNPCsCombat() -> Int32 { return 8; }
     public static func ProgressionEnemyRarityNPCsControl() -> Int32 { return 8; }
     public static func ProgressionEnemyRarityNPCsUltimate() -> Int32 { return 8; }
+
+    // Debug
+    public static func EnableDebugLog() -> Bool { return false; }
 }

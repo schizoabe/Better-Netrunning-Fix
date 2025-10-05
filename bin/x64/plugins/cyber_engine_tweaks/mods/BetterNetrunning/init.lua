@@ -12,7 +12,7 @@ local settings = {
     AlwaysAllowWhistle = false,
     AlwaysAllowDistract = false,
     -- Access Points
-    UnlockIfNoAccessPoint = true,
+    UnlockIfNoAccessPoint = false,
     DisableDatamineOneTwo = false,
     AllowAllDaemonsOnAccessPoints = false,
     -- Progression
@@ -39,13 +39,15 @@ local settings = {
     ProgressionEnemyRarityNPCsControl = 8,
     ProgressionEnemyRarityNPCsUltimate = 8,
     -- Progression - Always Unlocked
-    ProgressionAlwaysBasicDevices = false,
-    ProgressionAlwaysCameras = false,
-    ProgressionAlwaysTurrets = false,
-    ProgressionAlwaysNPCsCovert = false,
-    ProgressionAlwaysNPCsCombat = false,
-    ProgressionAlwaysNPCsControl = false,
-    ProgressionAlwaysNPCsUltimate = false
+    AlwaysBasicDevices = false,
+    AlwaysCameras = false,
+    AlwaysTurrets = false,
+    AlwaysNPCsCovert = false,
+    AlwaysNPCsCombat = false,
+    AlwaysNPCsControl = false,
+    AlwaysNPCsUltimate = false,
+    -- Debug
+    EnableDebugLog = false
 }
 
 registerForEvent("onInit", function()
@@ -103,6 +105,7 @@ function BuildSettingsMenu(nativeSettings)
     nativeSettings.addSubcategory("/BetterNetrunning/ProgressionCyberdeck", GetLocKey("Category-BetterNetrunning-ProgressionCyberdeck"))
     nativeSettings.addSubcategory("/BetterNetrunning/ProgressionIntelligence", GetLocKey("Category-BetterNetrunning-ProgressionIntelligence"))
     nativeSettings.addSubcategory("/BetterNetrunning/ProgressionEnemyRarity", GetLocKey("Category-BetterNetrunning-ProgressionEnemyRarity"))
+    nativeSettings.addSubcategory("/BetterNetrunning/Debug", GetLocKey("Category-Debug"))
 
     -- Controls
     local breachingHotkey = {[1] = "Choice1", [2] = "Choice2", [3] = "Choice3", [4] = "Choice4"}
@@ -162,32 +165,32 @@ function BuildSettingsMenu(nativeSettings)
         settings.AlwaysAllowDistract = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysBasicDevices"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysBasicDevices"), settings.ProgressionAlwaysBasicDevices, false, function(state)
-        settings.ProgressionAlwaysBasicDevices = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysBasicDevices"), GetLocKey("Description-BetterNetrunning-AlwaysBasicDevices"), settings.AlwaysBasicDevices, false, function(state)
+        settings.AlwaysBasicDevices = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysCameras"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysCameras"), settings.ProgressionAlwaysCameras, false, function(state)
-        settings.ProgressionAlwaysCameras = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysCameras"), GetLocKey("Description-BetterNetrunning-AlwaysCameras"), settings.AlwaysCameras, false, function(state)
+        settings.AlwaysCameras = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysTurrets"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysTurrets"), settings.ProgressionAlwaysTurrets, false, function(state)
-        settings.ProgressionAlwaysTurrets = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysTurrets"), GetLocKey("Description-BetterNetrunning-AlwaysTurrets"), settings.AlwaysTurrets, false, function(state)
+        settings.AlwaysTurrets = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsCovert"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsCovert"), settings.ProgressionAlwaysNPCsCovert, false, function(state)
-        settings.ProgressionAlwaysNPCsCovert = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysNPCsCovert"), GetLocKey("Description-BetterNetrunning-AlwaysNPCsCovert"), settings.AlwaysNPCsCovert, false, function(state)
+        settings.AlwaysNPCsCovert = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsCombat"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsCombat"), settings.ProgressionAlwaysNPCsCombat, false, function(state)
-        settings.ProgressionAlwaysNPCsCombat = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysNPCsCombat"), GetLocKey("Description-BetterNetrunning-AlwaysNPCsCombat"), settings.AlwaysNPCsCombat, false, function(state)
+        settings.AlwaysNPCsCombat = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsControl"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsControl"), settings.ProgressionAlwaysNPCsControl, false, function(state)
-        settings.ProgressionAlwaysNPCsControl = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysNPCsControl"), GetLocKey("Description-BetterNetrunning-AlwaysNPCsControl"), settings.AlwaysNPCsControl, false, function(state)
+        settings.AlwaysNPCsControl = state
         SaveSettings()
     end)
-    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-ProgressionAlwaysNPCsUltimate"), GetLocKey("Description-BetterNetrunning-ProgressionAlwaysNPCsUltimate"), settings.ProgressionAlwaysNPCsUltimate, false, function(state)
-        settings.ProgressionAlwaysNPCsUltimate = state
+    nativeSettings.addSwitch("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("DisplayName-BetterNetrunning-AlwaysNPCsUltimate"), GetLocKey("Description-BetterNetrunning-AlwaysNPCsUltimate"), settings.AlwaysNPCsUltimate, false, function(state)
+        settings.AlwaysNPCsUltimate = state
         SaveSettings()
     end)
 
@@ -276,6 +279,12 @@ function BuildSettingsMenu(nativeSettings)
         settings.ProgressionEnemyRarityNPCsUltimate = state
         SaveSettings()
     end)
+
+    -- Debug
+    nativeSettings.addSwitch("/BetterNetrunning/Debug", GetLocKey("DisplayName-BetterNetrunning-EnableDebugLog"), GetLocKey("Description-BetterNetrunning-EnableDebugLog"), settings.EnableDebugLog, false, function(state)
+        settings.EnableDebugLog = state
+        SaveSettings()
+    end)
 end
 
 function ApplyBreachingHotkey()
@@ -357,13 +366,15 @@ function OverrideConfigFunctions()
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsControl;", function() return settings.ProgressionEnemyRarityNPCsControl end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionEnemyRarityNPCsUltimate;", function() return settings.ProgressionEnemyRarityNPCsUltimate end)
     -- Progression - Always Unlocked
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysBasicDevices;", function() return settings.ProgressionAlwaysBasicDevices end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysCameras;", function() return settings.ProgressionAlwaysCameras end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysTurrets;", function() return settings.ProgressionAlwaysTurrets end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysNPCsCovert;", function() return settings.ProgressionAlwaysNPCsCovert end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysNPCsCombat;", function() return settings.ProgressionAlwaysNPCsCombat end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysNPCsControl;", function() return settings.ProgressionAlwaysNPCsControl end)
-    Override("BetterNetrunningConfig.BetterNetrunningSettings", "ProgressionAlwaysNPCsUltimate;", function() return settings.ProgressionAlwaysNPCsUltimate end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysBasicDevices;", function() return settings.AlwaysBasicDevices end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysCameras;", function() return settings.AlwaysCameras end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysTurrets;", function() return settings.AlwaysTurrets end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysNPCsCovert;", function() return settings.AlwaysNPCsCovert end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysNPCsCombat;", function() return settings.AlwaysNPCsCombat end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysNPCsControl;", function() return settings.AlwaysNPCsControl end)
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "AlwaysNPCsUltimate;", function() return settings.AlwaysNPCsUltimate end)
+    -- Etc.
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "EnableDebugLog;", function() return settings.EnableDebugLog end)
 end
 
 return true
