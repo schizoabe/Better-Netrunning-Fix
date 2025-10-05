@@ -2,7 +2,7 @@ module BetterNetrunning
 
 import BetterNetrunning.RadialUnlock.*
 import BetterNetrunning.Logger.*
-import BetterNetrunning.Config.*
+import BetterNetrunningConfig.*
 
 /*
  * Controls which breach programs (daemons) appear in the minigame
@@ -87,7 +87,7 @@ public func ShouldRemoveDeviceBackdoorPrograms(actionID: TweakDBID, entity: wref
 // Returns true if access point programs should be restricted (based on user settings)
 public func ShouldRemoveAccessPointPrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, isRemoteBreach: Bool) -> Bool {
   // Allow all programs if configured or if remote breach
-  if BN_Settings.AllowAllDaemonsOnAccessPoints() || isRemoteBreach {
+  if BetterNetrunningSettings.AllowAllDaemonsOnAccessPoints() || isRemoteBreach {
     return false;
   }
   // Remove non-access-point programs and non-unlock programs
@@ -154,13 +154,6 @@ public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
 
 // Returns true if programs should be removed based on device type availability
 public func ShouldRemoveDeviceTypePrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, data: ConnectedClassTypes) -> Bool {
-  // In RadialUnlock mode, delegate filtering to RadialBreach's physical proximity-based system if installed
-  // If RadialBreach is not installed, disable network-based filtering to reduce UI noise
-  if !BN_Settings.UnlockIfNoAccessPoint() {
-    return false;
-  }
-
-  // In Classic mode, use traditional network connectivity-based filtering
   // Remove camera programs if no cameras connected
   if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.CameraAccess) || actionID == t"MinigameAction.UnlockCameraQuickhacks") && !data.surveillanceCamera {
     return true;
@@ -178,7 +171,7 @@ public func ShouldRemoveDeviceTypePrograms(actionID: TweakDBID, miniGameActionRe
 
 // Returns true if Datamine V1/V2 programs should be removed (based on user settings)
 public func ShouldRemoveDataminePrograms(actionID: TweakDBID) -> Bool {
-  if !BN_Settings.DisableDatamineOneTwo() {
+  if !BetterNetrunningSettings.DisableDatamineOneTwo() {
     return false;
   }
   return Equals(actionID, t"MinigameAction.NetworkDataMineLootAllAdvanced")
@@ -229,7 +222,7 @@ protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, const 
     // Add tag kill mode quickhack
     this.AddTurretTagKillModeAction(actions);
     // Add toggle quickhacks (if not blocked by settings)
-    if !BN_Settings.BlockTurretDisableQuickhack() {
+    if !BetterNetrunningSettings.BlockTurretDisableQuickhack() {
       this.AddTurretToggleAction(actions, t"DeviceAction.TurretToggleStateClassHack");
       this.AddTurretToggleAction(actions, t"DeviceAction.TurretToggleStateClassLvl2Hack");
       this.AddTurretToggleAction(actions, t"DeviceAction.TurretToggleStateClassLvl3Hack");
@@ -307,7 +300,7 @@ protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, const 
     this.AddCameraAttitudeAction(actions, t"DeviceAction.OverrideAttitudeClassLvl4Hack");
     this.AddCameraAttitudeAction(actions, t"DeviceAction.OverrideAttitudeClassLvl5Hack");
     // Add toggle quickhack (if not blocked by settings)
-    if !BN_Settings.BlockCameraDisableQuickhack() {
+    if !BetterNetrunningSettings.BlockCameraDisableQuickhack() {
       this.AddCameraToggleAction(actions);
     }
   }
@@ -379,8 +372,8 @@ public final func SetActionsInactiveUnbreached(actions: script_ref<array<ref<Dev
 
   // For standalone devices: check radial breach state (within radius of breached AP)
   // CRITICAL: ShouldUnlockStandaloneDevice returns TRUE in two cases:
-  // 1. UnlockIfNoAccessPoint==true -> Always unlock (no AP required)
-  // 2. UnlockIfNoAccessPoint==false -> Only unlock if within radius of breached AP
+  // 1. UnlockIfNoAccessPoint==true → Always unlock (no AP required)
+  // 2. UnlockIfNoAccessPoint==false → Only unlock if within radius of breached AP
   // When unlocked via radial breach, treat as if the device was directly breached
   if isStandaloneDevice && ShouldUnlockStandaloneDevice(this, this.GetGameInstance()) {
     BNLog("SetActionsInactiveUnbreached: Standalone device unlocked via ShouldUnlockStandaloneDevice");
@@ -403,17 +396,17 @@ public final func SetActionsInactiveUnbreached(actions: script_ref<array<ref<Dev
 
   // Check progression requirements for each device type
   // LOGIC: (Device is breached) OR (Player has sufficient progression)
-  // - If breached -> Allow regardless of progression (breach reward)
-  // - If not breached -> Allow only if progression requirements met
-  let allowCameras: Bool = this.m_betterNetrunningBreachedCameras || ShouldUnlockHackDevice(this.GetGameInstance(), BN_Settings.AlwaysCameras(), BN_Settings.ProgressionCyberdeckCameras(), BN_Settings.ProgressionIntelligenceCameras());
-  let allowTurrets: Bool = this.m_betterNetrunningBreachedTurrets || ShouldUnlockHackDevice(this.GetGameInstance(), BN_Settings.AlwaysTurrets(), BN_Settings.ProgressionCyberdeckTurrets(), BN_Settings.ProgressionIntelligenceTurrets());
-  let allowBasicDevices: Bool = this.m_betterNetrunningBreachedBasic || ShouldUnlockHackDevice(this.GetGameInstance(), BN_Settings.AlwaysBasicDevices(), BN_Settings.ProgressionCyberdeckBasicDevices(), BN_Settings.ProgressionIntelligenceBasicDevices());
+  // - If breached → Allow regardless of progression (breach reward)
+  // - If not breached → Allow only if progression requirements met
+  let allowCameras: Bool = this.m_betterNetrunningBreachedCameras || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysCameras(), BetterNetrunningSettings.ProgressionCyberdeckCameras(), BetterNetrunningSettings.ProgressionIntelligenceCameras());
+  let allowTurrets: Bool = this.m_betterNetrunningBreachedTurrets || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysTurrets(), BetterNetrunningSettings.ProgressionCyberdeckTurrets(), BetterNetrunningSettings.ProgressionIntelligenceTurrets());
+  let allowBasicDevices: Bool = this.m_betterNetrunningBreachedBasic || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysBasicDevices(), BetterNetrunningSettings.ProgressionCyberdeckBasicDevices(), BetterNetrunningSettings.ProgressionIntelligenceBasicDevices());
 
   BNLog("SetActionsInactiveUnbreached: allowBasicDevices=" + ToString(allowBasicDevices) + ", allowCameras=" + ToString(allowCameras) + ", allowTurrets=" + ToString(allowTurrets));
 
   // Check special always-allowed quickhacks
-  let allowPing: Bool = BN_Settings.AlwaysAllowPing();
-  let allowDistraction: Bool = BN_Settings.AlwaysAllowDistract();
+  let allowPing: Bool = BetterNetrunningSettings.AlwaysAllowPing();
+  let allowDistraction: Bool = BetterNetrunningSettings.AlwaysAllowDistract();
 
   // Set quickhacks inactive if progression requirements not met
   while i < ArraySize(Deref(actions)) {
@@ -542,25 +535,25 @@ public final func GetRemoteActions(out outActions: array<ref<DeviceAction>>, con
   }
 
   // CRITICAL FIX: Correct logic for unsecured network
-  // UnlockIfNoAccessPoint = true -> Devices without AP are always unlocked (no restrictions)
-  // UnlockIfNoAccessPoint = false -> Devices without AP require breach (restrictions apply)
-  let isUnsecuredNetwork: Bool = !hasAccessPoint && BN_Settings.UnlockIfNoAccessPoint();
+  // UnlockIfNoAccessPoint = true → Devices without AP are always unlocked (no restrictions)
+  // UnlockIfNoAccessPoint = false → Devices without AP require breach (restrictions apply)
+  let isUnsecuredNetwork: Bool = !hasAccessPoint && BetterNetrunningSettings.UnlockIfNoAccessPoint();
 
   let deviceEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
   let deviceName: String = IsDefined(deviceEntity) ? ToString(deviceEntity.GetClassName()) : "Unknown";
-  BNLog("GetRemoteActions: Device=" + deviceName + ", hasAccessPoint=" + ToString(hasAccessPoint) + ", apCount=" + ToString(apCount) + ", UnlockIfNoAccessPoint=" + ToString(BN_Settings.UnlockIfNoAccessPoint()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork));
+  BNLog("GetRemoteActions: Device=" + deviceName + ", hasAccessPoint=" + ToString(hasAccessPoint) + ", apCount=" + ToString(apCount) + ", UnlockIfNoAccessPoint=" + ToString(BetterNetrunningSettings.UnlockIfNoAccessPoint()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork));
 
   // Handle sequencer lock or breach state
   if this.IsLockedViaSequencer() {
     // Sequencer locked: only allow RemoteBreach action
     ScriptableDeviceComponentPS.SetActionsInactiveAll(outActions, "LocKey#7021", n"RemoteBreach");
     BNLog("GetRemoteActions: Sequencer locked");
-  } else if !BN_Settings.EnableClassicMode() && !isUnsecuredNetwork {
+  } else if !BetterNetrunningSettings.EnableClassicMode() && !isUnsecuredNetwork {
     // Progressive Mode: apply device-type-specific unlock restrictions (unless unsecured network)
     BNLog("GetRemoteActions: Applying progressive unlock restrictions");
     this.SetActionsInactiveUnbreached(outActions);
   } else {
-    BNLog("GetRemoteActions: No restrictions (ClassicMode=" + ToString(BN_Settings.EnableClassicMode()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork) + ")");
+    BNLog("GetRemoteActions: No restrictions (ClassicMode=" + ToString(BetterNetrunningSettings.EnableClassicMode()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork) + ")");
   }
   // If isUnsecuredNetwork == true, all quickhacks remain active (no restrictions applied)
 }
@@ -588,7 +581,7 @@ public const func CanRevealRemoteActionsWheel() -> Bool {
  *
  * ARCHITECTURE:
  * - Progressive unlock via ShouldUnlockHackNPC() (checks Cyberdeck tier, Intelligence, Enemy Rarity)
- * - Network isolation detection -> auto-unlock for isolated NPCs
+ * - Network isolation detection → auto-unlock for isolated NPCs
  * - Category-based restrictions (Covert, Combat, Control, Ultimate, Ping, Whistle)
  */
 @replaceMethod(ScriptedPuppetPS)
@@ -609,12 +602,12 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
   }
 
   // Evaluate progression-based unlock conditions for hack categories
-  let allowCovert: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BN_Settings.AlwaysNPCsCovert(), BN_Settings.ProgressionCyberdeckNPCsCovert(), BN_Settings.ProgressionIntelligenceNPCsCovert(), BN_Settings.ProgressionEnemyRarityNPCsCovert());
-  let allowCombat: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BN_Settings.AlwaysNPCsCombat(), BN_Settings.ProgressionCyberdeckNPCsCombat(), BN_Settings.ProgressionIntelligenceNPCsCombat(), BN_Settings.ProgressionEnemyRarityNPCsCombat());
-  let allowControl: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BN_Settings.AlwaysNPCsControl(), BN_Settings.ProgressionCyberdeckNPCsControl(), BN_Settings.ProgressionIntelligenceNPCsControl(), BN_Settings.ProgressionEnemyRarityNPCsControl());
-  let allowUltimate: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BN_Settings.AlwaysNPCsUltimate(), BN_Settings.ProgressionCyberdeckNPCsUltimate(), BN_Settings.ProgressionIntelligenceNPCsUltimate(), BN_Settings.ProgressionEnemyRarityNPCsUltimate());
-  let allowPing: Bool = BN_Settings.AlwaysAllowPing() || allowCovert;
-  let allowWhistle: Bool = BN_Settings.AlwaysAllowWhistle() || allowCovert;
+  let allowCovert: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCovert());
+  let allowCombat: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsCombat(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCombat(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCombat(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCombat());
+  let allowControl: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsControl(), BetterNetrunningSettings.ProgressionCyberdeckNPCsControl(), BetterNetrunningSettings.ProgressionIntelligenceNPCsControl(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsControl());
+  let allowUltimate: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsUltimate(), BetterNetrunningSettings.ProgressionCyberdeckNPCsUltimate(), BetterNetrunningSettings.ProgressionIntelligenceNPCsUltimate(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsUltimate());
+  let allowPing: Bool = BetterNetrunningSettings.AlwaysAllowPing() || allowCovert;
+  let allowWhistle: Bool = BetterNetrunningSettings.AlwaysAllowWhistle() || allowCovert;
 
   let i: Int32 = 0;
   while i < ArraySize(Deref(actions)) {
@@ -803,7 +796,7 @@ public final func IsConnectedToPhysicalAccessPoint() -> Bool {
  */
 @wrapMethod(ScriptedPuppetPS)
 public final const func GetValidChoices(const actions: script_ref<array<wref<ObjectAction_Record>>>, const context: script_ref<GetActionsContext>, objectActionsCallbackController: wref<gameObjectActionsCallbackController>, checkPlayerQuickHackList: Bool, choices: script_ref<array<InteractionChoice>>) -> Void {
-	if BN_Settings.AllowBreachingUnconsciousNPCs() && this.IsConnectedToAccessPoint() && (!BN_Settings.UnlockIfNoAccessPoint() || this.GetDeviceLink().IsConnectedToPhysicalAccessPoint()) && !this.m_betterNetrunningWasDirectlyBreached {
+	if BetterNetrunningSettings.AllowBreachingUnconsciousNPCs() && this.IsConnectedToAccessPoint() && (!BetterNetrunningSettings.UnlockIfNoAccessPoint() || this.GetDeviceLink().IsConnectedToPhysicalAccessPoint()) && !this.m_betterNetrunningWasDirectlyBreached {
     ArrayPush(Deref(actions), TweakDBInterface.GetObjectActionRecord(t"Takedown.BreachUnconsciousOfficer"));
   }
 	wrappedMethod(actions, context, objectActionsCallbackController, checkPlayerQuickHackList, choices);
@@ -1014,7 +1007,7 @@ private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<re
     let device: ref<DeviceComponentPS> = Deref(devices)[i];
 
     // Classic mode: unlock all quickhacks on all devices
-    if BN_Settings.EnableClassicMode() {
+    if BetterNetrunningSettings.EnableClassicMode() {
       this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
     }
     // Progressive mode: unlock by device type
@@ -1064,7 +1057,7 @@ private final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockF
  */
 @addMethod(MinigameGenerationRuleScalingPrograms)
 public final func InjectBetterNetrunningPrograms(programs: script_ref<array<MinigameProgramData>>) -> Void {
-  if BN_Settings.EnableClassicMode() {
+  if BetterNetrunningSettings.EnableClassicMode() {
     return;
   }
 
@@ -1208,7 +1201,7 @@ private final func RestoreTimeDilation() -> Void {
 // - Latest version: Changed to EnemyRarity for more granular control (intentional design change)
 //
 // RATIONALE: EnemyRarity provides better progression curve:
-// - Weak -> Normal -> Strong -> Elite -> Rare -> Boss -> MiniBoss -> MaxTac
+// - Weak → Normal → Strong → Elite → Rare → Boss → MiniBoss → MaxTac
 // - More nuanced than simple level ranges
 // - Aligned with vanilla game's enemy classification system
 
@@ -1347,7 +1340,7 @@ public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>,
     return false;
   }
 
-  let requireAll: Bool = BN_Settings.ProgressionRequireAll();
+  let requireAll: Bool = BetterNetrunningSettings.ProgressionRequireAll();
   let conditionCyberdeck: Bool = CyberdeckConditionMet(gameInstance, cyberdeckValue);
   let conditionIntelligence: Bool = IntelligenceConditionMet(gameInstance, intelligenceValue);
   let conditionEnemyRarity: Bool = EnemyRarityConditionMet(gameInstance, enemy, enemyRarityValue);
@@ -1372,7 +1365,7 @@ public func ShouldUnlockHackDevice(gameInstance: GameInstance, alwaysAllow: Bool
     return false;
   }
 
-  let requireAll: Bool = BN_Settings.ProgressionRequireAll();
+  let requireAll: Bool = BetterNetrunningSettings.ProgressionRequireAll();
   let conditionCyberdeck: Bool = CyberdeckConditionMet(gameInstance, cyberdeckValue);
   let conditionIntelligence: Bool = IntelligenceConditionMet(gameInstance, intelligenceValue);
 

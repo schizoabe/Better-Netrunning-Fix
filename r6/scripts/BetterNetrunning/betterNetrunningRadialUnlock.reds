@@ -1,7 +1,7 @@
 module BetterNetrunning.RadialUnlock
 
 import BetterNetrunning.Logger.*
-import BetterNetrunning.Config.*
+import BetterNetrunningConfig.*
 
 /*
  * Radial-based network breach tracking for standalone devices
@@ -107,16 +107,16 @@ public func RecordAccessPointBreach(apEntityID: EntityID, gameInstance: GameInst
  */
 public func ShouldUnlockStandaloneDevice(device: ref<ScriptableDeviceComponentPS>, gameInstance: GameInstance) -> Bool {
   // CRITICAL FIX: UnlockIfNoAccessPoint setting logic
-  // - UnlockIfNoAccessPoint = true -> Standalone devices ALWAYS unlock (don't require AP)
-  // - UnlockIfNoAccessPoint = false -> Standalone devices require nearby breached AP
+  // - UnlockIfNoAccessPoint = true ↁEStandalone devices ALWAYS unlock (don't require AP)
+  // - UnlockIfNoAccessPoint = false ↁEStandalone devices require nearby breached AP
 
-  if BN_Settings.UnlockIfNoAccessPoint() {
-    // Setting is TRUE -> Always unlock standalone devices without requiring AP
+  if BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+    // Setting is TRUE ↁEAlways unlock standalone devices without requiring AP
     BNLog("ShouldUnlockStandaloneDevice: UnlockIfNoAccessPoint=true, always unlock");
     return true;
   }
 
-  // Setting is FALSE -> Require nearby breached AccessPoint
+  // Setting is FALSE ↁERequire nearby breached AccessPoint
   BNLog("ShouldUnlockStandaloneDevice: UnlockIfNoAccessPoint=false, checking radius...");
 
   // Get device position

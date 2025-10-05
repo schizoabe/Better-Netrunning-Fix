@@ -1,6 +1,6 @@
 module BetterNetrunning.Logger
 
-import BetterNetrunning.Config.*
+import BetterNetrunningConfig.*
 
 /*
  * Centralized logging system for Better Netrunning mod
@@ -14,7 +14,7 @@ import BetterNetrunning.Config.*
  * @param message The log message to output
  */
 public static func BNLog(message: String) -> Void {
-  if BN_Settings.EnableDebugLog() {
+  if BetterNetrunningSettings.EnableDebugLog() {
     ModLog(n"BetterNetrunning", message);
   }
 }

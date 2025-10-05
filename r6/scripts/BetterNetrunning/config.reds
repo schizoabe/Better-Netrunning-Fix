@@ -1,6 +1,6 @@
-module BetterNetrunning.Config
+module BetterNetrunningConfig
 
-public class BN_Settings {
+public class BetterNetrunningSettings {
 
     // !!! WARNING !!!
     // If using Native Settings UI, the values in this file will have no effect.
