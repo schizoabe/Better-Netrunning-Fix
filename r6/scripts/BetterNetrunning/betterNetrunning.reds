@@ -3,6 +3,8 @@ module BetterNetrunning
 import BetterNetrunning.RadialUnlock.*
 import BetterNetrunning.Logger.*
 import BetterNetrunningConfig.*
+import DNR.Core.*
+import DNR.Settings.*
 
 /*
  * Controls which breach programs (daemons) appear in the minigame
@@ -42,6 +44,20 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
     data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
   }
 
+  // Get device PS and check breach status for DNR gating - will reuse this for breach takedown improvement's daemons too, but pointing towards cameras/turrets
+let devPS: ref<SharedGameplayPS>;
+if IsDefined(this.m_entity as ScriptedPuppet) {
+  devPS = (this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink();
+} else {
+  devPS = (this.m_entity as Device).GetDevicePS();
+}
+
+// Check if required subnets breached for DNR daemons
+// DNR daemons require: Basic subnet + NPC subnet to be breached
+let dnrSubnetsBreached: Bool = IsDefined(devPS)
+  && devPS.m_betterNetrunningBreachedBasic
+  && devPS.m_betterNetrunningBreachedNPCs;
+
   // Filter programs in reverse order to safely remove elements
   let i: Int32 = ArraySize(Deref(programs)) - 1;
   while i >= 0 {
@@ -59,6 +75,9 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
     }
     i -= 1;
   };
+//PIERRE DNR
+  this.ApplyDNRGating(programs, dnrSubnetsBreached);
+  //PIERRE DNR
 }
 
 // ==================== Program Filtering Functions ====================
@@ -66,6 +85,59 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
 // which breach programs should be available in the current context
 
 // Returns true if unlock programs should be removed (when target is not connected to network)
+
+
+//PIERRE DNR
+//=============================================================================
+// dunno if this is what you would want Kei, credits to BiasNil
+@addMethod(MinigameGenerationRuleScalingPrograms)
+@if(ModuleExists("DNR.Replace"))
+private final func ApplyDNRGating(programs: script_ref<array<MinigameProgramData>>, dnrSubnetsBreached: Bool) -> Void {
+  // Don't show DNR daemons until Basic + NPC subnets are breached
+  if !dnrSubnetsBreached {
+    DNR_BP_RemoveAllDNRPrograms(programs);
+    return;
+  }
+
+  let player: wref<PlayerPuppet> = this.m_player as PlayerPuppet;
+  if !IsDefined(player) {
+    return;
+  }
+
+  let s: ref<DNR_Settings> = DNR_Svc();
+
+  // Remove all DNR programs if queue mastery is required but not met
+  if IsDefined(s) && s.bpdeviceRequiresQueueMastery && !DNR_PlayerHasQueueMastery(player) {
+    DNR_BP_RemoveAllDNRPrograms(programs);
+    return;
+  }
+
+  // Remove all DNR programs if network breach is required but not met
+  if IsDefined(s) && s.bpdeviceRequiresNetworkBreached {
+    if !DNR_BP_CheckNetworkBreached(this.m_entity, this.m_isRemoteBreach) {
+      DNR_BP_RemoveAllDNRPrograms(programs);
+      return;
+    }
+  }
+
+  // Add DNR programs based on player's owned quickhacks
+  DNR_BP_AddQualifiedPrograms(player, programs, this.m_isRemoteBreach);
+  
+  // Remove wrong variant (Remote vs AP versions)
+  DNR_BP_RemoveWrongVariant(programs, this.m_isRemoteBreach);
+}
+
+@addMethod(MinigameGenerationRuleScalingPrograms)
+@if(!ModuleExists("DNR.Replace"))
+private final func ApplyDNRGating(programs: script_ref<array<MinigameProgramData>>, dnrSubnetsBreached: Bool) -> Void {
+  // st000ob
+}
+//=============================================================================
+//PIERRE DNR
+
+
+
+
 public func ShouldRemoveNetworkPrograms(actionID: TweakDBID, connectedToNetwork: Bool) -> Bool {
   if connectedToNetwork {
     return false;
