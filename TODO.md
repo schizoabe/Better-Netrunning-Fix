@@ -664,22 +664,7 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
 
 ## Medium Priority
 
-### Code Architecture - betterNetrunning.reds Modularization
-- **Status**: 💤 Proposed
-- **Priority**: 🟡 MEDIUM
-- **Description**: Further refactor betterNetrunning.reds to reduce file size and improve maintainability
-- **Current State**: 1,793 lines (40% of entire codebase)
-- **Target Date**: TBD
-- **Effort Estimate**: 8-12 hours
-
-**Proposed Phases**:
-1. Extract Progression System (~250 lines) → `Common/ProgressionSystem.reds`
-2. Extract Program Filtering (~170 lines) → `Common/ProgramFiltering.reds`
-3. Extract AccessPoint Breach System (~600 lines) → `AccessPointBreach/BreachSystem.reds`
-4. Extract NPC Breach System (~200 lines) → `AccessPointBreach/NPCBreach.reds`
-5. Extract Device Quickhack Management (~300 lines) → `Device/DeviceQuickhack.reds`
-
-**Expected Result**: betterNetrunning.reds reduced from 1,793 → ~400 lines (78% reduction)
+*No medium priority tasks at this time*
 
 ---
 
@@ -719,10 +704,8 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
    - Next Action: Integration testing (Phase 4), Documentation (Phase 5)
    - Effort: 2-3 hours remaining
 
-### 🟡 Medium Priority (1 task)
-1. **Code Architecture - betterNetrunning.reds Modularization**
-   - Status: 💤 Proposed
-   - Next Action: Prioritize after High Priority tasks complete
+### 🟡 Medium Priority (0 tasks)
+*No medium priority tasks at this time*
 
 ### 🟢 Low Priority (2 tasks)
 1. **CustomHackingSystem - Dynamic Program Filtering API**

@@ -97,3 +97,13 @@ public func OnSetBreachedSubnet(evt: ref<SetBreachedSubnet>) -> EntityNotificati
   }
   return EntityNotificationType.DoNotNotifyEntity;
 }
+
+// ==================== Utility Functions ====================
+
+// Returns true if the action is a CustomHackingSystem RemoteBreach action
+// Used for identifying custom breach actions that need special handling
+public func IsCustomRemoteBreachAction(className: CName) -> Bool {
+  return Equals(className, n"BetterNetrunning.CustomHacking.RemoteBreachAction")
+      || Equals(className, n"BetterNetrunning.CustomHacking.VehicleRemoteBreachAction")
+      || Equals(className, n"BetterNetrunning.CustomHacking.DeviceRemoteBreachAction");
+}
