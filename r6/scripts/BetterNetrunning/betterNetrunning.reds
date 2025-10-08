@@ -3,8 +3,6 @@ module BetterNetrunning
 import BetterNetrunning.Common.*
 import BetterNetrunning.CustomHacking.*
 import BetterNetrunningConfig.*
-import DNR.Core.*
-import DNR.Settings.*
 
 // Import RadialBreach settings when available
 @if(ModuleExists("RadialBreach"))
@@ -55,31 +53,20 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
   // Apply Better Netrunning custom filtering rules
   let connectedToNetwork: Bool;
   let data: ConnectedClassTypes;
+  let devPS: ref<SharedGameplayPS>; // Used for subnet breach tracking and DNR gating
 
   // Get network connection status and available device types
   if (this.m_entity as GameObject).IsPuppet() {
     connectedToNetwork = true;
     data = (this.m_entity as ScriptedPuppet).GetMasterConnectedClassTypes();
+    devPS = (this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink();
     BNLog("[FilterPlayerPrograms] Target: NPC (always connected)");
   } else {
     connectedToNetwork = (this.m_entity as Device).GetDevicePS().IsConnectedToPhysicalAccessPoint();
     data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
+    devPS = (this.m_entity as Device).GetDevicePS() as SharedGameplayPS;
     BNLog("[FilterPlayerPrograms] Target: Device (connected=" + ToString(connectedToNetwork) + ")");
   }
-
-  // Get device PS and check breach status for DNR gating - will reuse this for breach takedown improvement's daemons too, but pointing towards cameras/turrets
-let devPS: ref<SharedGameplayPS>;
-if IsDefined(this.m_entity as ScriptedPuppet) {
-  devPS = (this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink();
-} else {
-  devPS = (this.m_entity as Device).GetDevicePS();
-}
-
-// Check if required subnets breached for DNR daemons
-// DNR daemons require: Basic subnet + NPC subnet to be breached
-let dnrSubnetsBreached: Bool = IsDefined(devPS)
-  && devPS.m_betterNetrunningBreachedBasic
-  && devPS.m_betterNetrunningBreachedNPCs;
 
   // Filter programs in reverse order to safely remove elements
   let removedCount: Int32 = 0;
@@ -100,9 +87,10 @@ let dnrSubnetsBreached: Bool = IsDefined(devPS)
     }
     i -= 1;
   };
-  //PIERRE DNR
-  this.ApplyDNRGating(programs, dnrSubnetsBreached);
-  //PIERRE DNR
+
+  // Apply DNR (Daemon Netrunning Revamp) daemon gating
+  // This integrates DNR's advanced daemon system with Better Netrunning's subnet-based progression
+  ApplyDNRDaemonGating(programs, devPS, this.m_isRemoteBreach, this.m_player as PlayerPuppet, this.m_entity);
 
   BNLog("[FilterPlayerPrograms] Removed " + ToString(removedCount) + " programs, final count: " + ToString(ArraySize(Deref(programs))));
 }
@@ -112,59 +100,6 @@ let dnrSubnetsBreached: Bool = IsDefined(devPS)
 // which breach programs should be available in the current context
 
 // Returns true if unlock programs should be removed (when target is not connected to network)
-
-
-//PIERRE DNR
-//=============================================================================
-// dunno if this is what you would want Kei, credits to BiasNil
-@addMethod(MinigameGenerationRuleScalingPrograms)
-@if(ModuleExists("DNR.Replace"))
-private final func ApplyDNRGating(programs: script_ref<array<MinigameProgramData>>, dnrSubnetsBreached: Bool) -> Void {
-  // Don't show DNR daemons until Basic + NPC subnets are breached
-  if !dnrSubnetsBreached {
-    DNR_BP_RemoveAllDNRPrograms(programs);
-    return;
-  }
-
-  let player: wref<PlayerPuppet> = this.m_player as PlayerPuppet;
-  if !IsDefined(player) {
-    return;
-  }
-
-  let s: ref<DNR_Settings> = DNR_Svc();
-
-  // Remove all DNR programs if queue mastery is required but not met
-  if IsDefined(s) && s.bpdeviceRequiresQueueMastery && !DNR_PlayerHasQueueMastery(player) {
-    DNR_BP_RemoveAllDNRPrograms(programs);
-    return;
-  }
-
-  // Remove all DNR programs if network breach is required but not met
-  if IsDefined(s) && s.bpdeviceRequiresNetworkBreached {
-    if !DNR_BP_CheckNetworkBreached(this.m_entity, this.m_isRemoteBreach) {
-      DNR_BP_RemoveAllDNRPrograms(programs);
-      return;
-    }
-  }
-
-  // Add DNR programs based on player's owned quickhacks
-  DNR_BP_AddQualifiedPrograms(player, programs, this.m_isRemoteBreach);
-  
-  // Remove wrong variant (Remote vs AP versions)
-  DNR_BP_RemoveWrongVariant(programs, this.m_isRemoteBreach);
-}
-
-@addMethod(MinigameGenerationRuleScalingPrograms)
-@if(!ModuleExists("DNR.Replace"))
-private final func ApplyDNRGating(programs: script_ref<array<MinigameProgramData>>, dnrSubnetsBreached: Bool) -> Void {
-  // st000ob
-}
-//=============================================================================
-//PIERRE DNR
-
-
-
-
 public func ShouldRemoveNetworkPrograms(actionID: TweakDBID, connectedToNetwork: Bool) -> Bool {
   if connectedToNetwork {
     return false;
@@ -226,30 +161,6 @@ private func IsUnlockQuickhackAction(actionID: TweakDBID) -> Bool {
       || actionID == t"MinigameAction.UnlockNPCQuickhacks"
       || actionID == t"MinigameAction.UnlockCameraQuickhacks"
       || actionID == t"MinigameAction.UnlockTurretQuickhacks";
-}
-
-// Returns true if ultimate hack programs should be removed when DNR mod is installed
-// DNR (Daemon Netrunning Revamp) compatibility layer
-@if(ModuleExists("DNR.Replace"))
-public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
-  return actionID == t"MinigameAction.RemoteCyberpsychosis"
-      || actionID == t"MinigameAction.Cyberpsychosis_AP"
-      || actionID == t"MinigameAction.RemoteSuicide"
-      || actionID == t"MinigameAction.Suicide_AP"
-      || actionID == t"MinigameAction.RemoteSystemReset"
-      || actionID == t"MinigameAction.SystemReset_AP"
-      || actionID == t"MinigameAction.RemoteDetonateGrenade"
-      || actionID == t"MinigameAction.DetonateGrenade_AP"
-      || actionID == t"MinigameAction.RemoteNetworkOverload"
-      || actionID == t"MinigameAction.NetworkOverload_AP"
-      || actionID == t"MinigameAction.RemoteNetworkContagion"
-      || actionID == t"MinigameAction.NetworkContagion_AP";
-}
-
-// Stub implementation when DNR mod is not installed (always returns false)
-@if(!ModuleExists("DNR.Replace"))
-public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
-  return false;
 }
 
 // Returns true if already breached programs should be removed
