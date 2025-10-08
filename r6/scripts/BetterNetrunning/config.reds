@@ -12,8 +12,11 @@ public class BetterNetrunningSettings {
     public static func EnableClassicMode() -> Bool { return false; }
     public static func AllowBreachingUnconsciousNPCs() -> Bool { return true; }
 
+    // RemoteBreach
+    public static func RemoteBreachRAMCostPercent() -> Int32 { return 35; }
+
     // Access Points
-    public static func UnlockIfNoAccessPoint() -> Bool { return true; }
+    public static func UnlockIfNoAccessPoint() -> Bool { return false; }
     public static func DisableDatamineOneTwo() -> Bool { return false; }
     public static func AllowAllDaemonsOnAccessPoints() -> Bool { return false; }
 

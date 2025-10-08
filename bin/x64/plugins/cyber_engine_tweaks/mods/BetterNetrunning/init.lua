@@ -1,9 +1,11 @@
-local settings = {
+﻿local settings = {
     -- Controls
     BreachingHotkey = 3,
     -- Breaching
     EnableClassicMode = false,
     AllowBreachUnconscious = true,
+    -- RemoteBreach
+    RemoteBreachRAMCostPercent = 35,
     -- Removed Quickhacks
     BlockCameraDisable = false,
     BlockTurretDisable = false,
@@ -65,6 +67,15 @@ registerForEvent("onInit", function()
     SetupAccessProgram("NetworkCameraAccess", "UnlockCameraQuickhacks", LocKey("Better-Netrunning-Camera-Access-Name"), LocKey("Better-Netrunning-Camera-Access-Description"), "ChoiceCaptionParts.CameraShutdownIcon", 40.0)
     SetupAccessProgram("NetworkTurretAccess", "UnlockTurretQuickhacks", LocKey("Better-Netrunning-Turret-Access-Name"), LocKey("Better-Netrunning-Turret-Access-Description"), "ChoiceCaptionParts.TurretShutdownIcon", 70.0)
     SetupUnconsciousBreachAction()
+
+    -- Initialize CustomHackingSystem integration (if available)
+    local RemoteBreach = require("remoteBreach")
+    if RemoteBreach and RemoteBreach.Setup then
+        RemoteBreach.Setup()
+        print("[Better Netrunning] Remote Breach feature enabled (CustomHackingSystem integration)")
+    else
+        print("[Better Netrunning] Remote Breach feature unavailable (CustomHackingSystem not found)")
+    end
 end)
 
 function SetupUnconsciousBreachAction()
@@ -98,6 +109,7 @@ function BuildSettingsMenu(nativeSettings)
 
     nativeSettings.addSubcategory("/BetterNetrunning/Controls", GetLocKey("Category-Controls"))
     nativeSettings.addSubcategory("/BetterNetrunning/Breaching", GetLocKey("Category-Breaching"))
+    nativeSettings.addSubcategory("/BetterNetrunning/RemoteBreach", GetLocKey("Category-RemoteBreach"))
     nativeSettings.addSubcategory("/BetterNetrunning/AccessPoints", GetLocKey("Category-AccessPoints"))
     nativeSettings.addSubcategory("/BetterNetrunning/RemovedQuickhacks", GetLocKey("Category-RemovedQuickhacks"))
     nativeSettings.addSubcategory("/BetterNetrunning/UnlockedQuickhacks", GetLocKey("Category-UnlockedQuickhacks"))
@@ -127,6 +139,15 @@ function BuildSettingsMenu(nativeSettings)
         settings.AllowBreachUnconscious = state
         SaveSettings()
     end)
+
+    -- RemoteBreach
+    nativeSettings.addRangeInt("/BetterNetrunning/RemoteBreach", GetLocKey("DisplayName-BetterNetrunning-RemoteBreachRAMCostPercent"), GetLocKey("Description-BetterNetrunning-RemoteBreachRAMCostPercent"), 10, 100, 5,
+        settings.RemoteBreachRAMCostPercent, 35,
+        function(state)
+            settings.RemoteBreachRAMCostPercent = state
+            SaveSettings()
+        end
+    )
 
     -- Access Points
     nativeSettings.addSwitch("/BetterNetrunning/AccessPoints", GetLocKey("DisplayName-BetterNetrunning-UnlockIfNoAccessPoint"), GetLocKey("Description-BetterNetrunning-UnlockIfNoAccessPoint"), settings.UnlockIfNoAccessPoint, true, function(state)
@@ -331,6 +352,8 @@ function OverrideConfigFunctions()
     -- Breaching
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "EnableClassicMode;", function() return settings.EnableClassicMode end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "AllowBreachingUnconsciousNPCs;", function() return settings.AllowBreachUnconscious end)
+    -- RemoteBreach
+    Override("BetterNetrunningConfig.BetterNetrunningSettings", "RemoteBreachRAMCostPercent;", function() return settings.RemoteBreachRAMCostPercent end)
     -- Removed Quickhacks
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "BlockCameraDisableQuickhack;", function() return settings.BlockCameraDisable end)
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "BlockTurretDisableQuickhack;", function() return settings.BlockTurretDisable end)
@@ -376,5 +399,4 @@ function OverrideConfigFunctions()
     -- Etc.
     Override("BetterNetrunningConfig.BetterNetrunningSettings", "EnableDebugLog;", function() return settings.EnableDebugLog end)
 end
-
 return true
