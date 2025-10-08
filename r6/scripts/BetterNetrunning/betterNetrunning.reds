@@ -1,10 +1,14 @@
 module BetterNetrunning
 
-import BetterNetrunning.RadialUnlock.*
-import BetterNetrunning.Logger.*
+import BetterNetrunning.Common.*
+import BetterNetrunning.CustomHacking.*
 import BetterNetrunningConfig.*
 import DNR.Core.*
 import DNR.Settings.*
+
+// Import RadialBreach settings when available
+@if(ModuleExists("RadialBreach"))
+import RadialBreach.Config.*
 
 /*
  * Controls which breach programs (daemons) appear in the minigame
@@ -24,12 +28,29 @@ import DNR.Settings.*
  */
 @wrapMethod(MinigameGenerationRuleScalingPrograms)
 public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgramData>>) -> Void {
+  BNLog("[FilterPlayerPrograms] Starting daemon filtering");
+
   // Inject Better Netrunning specific programs into player's program list
   this.InjectBetterNetrunningPrograms(programs);
   // Store the hacking target entity in minigame blackboard (used for access point logic)
   this.m_blackboardSystem.Get(GetAllBlackboardDefs().HackingMinigame).SetVariant(GetAllBlackboardDefs().HackingMinigame.Entity, ToVariant(this.m_entity));
-  // Call vanilla filtering logic
+
+  // Call vanilla filtering logic FIRST to properly initialize program data
+  // This populates actionID fields correctly
   wrappedMethod(programs);
+
+  BNLog("[FilterPlayerPrograms] Initial program count: " + ToString(ArraySize(Deref(programs))));
+
+  // CRITICAL: Remove already-breached programs AFTER wrappedMethod()
+  // This ensures actionID fields are properly initialized by vanilla logic
+  let i: Int32 = ArraySize(Deref(programs)) - 1;
+  while i >= 0 {
+    let actionID: TweakDBID = Deref(programs)[i].actionID;
+    if ShouldRemoveBreachedPrograms(actionID, this.m_entity as GameObject) {
+      ArrayErase(Deref(programs), i);
+    }
+    i -= 1;
+  }
 
   // Apply Better Netrunning custom filtering rules
   let connectedToNetwork: Bool;
@@ -39,9 +60,11 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
   if (this.m_entity as GameObject).IsPuppet() {
     connectedToNetwork = true;
     data = (this.m_entity as ScriptedPuppet).GetMasterConnectedClassTypes();
+    BNLog("[FilterPlayerPrograms] Target: NPC (always connected)");
   } else {
     connectedToNetwork = (this.m_entity as Device).GetDevicePS().IsConnectedToPhysicalAccessPoint();
     data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
+    BNLog("[FilterPlayerPrograms] Target: Device (connected=" + ToString(connectedToNetwork) + ")");
   }
 
   // Get device PS and check breach status for DNR gating - will reuse this for breach takedown improvement's daemons too, but pointing towards cameras/turrets
@@ -59,7 +82,8 @@ let dnrSubnetsBreached: Bool = IsDefined(devPS)
   && devPS.m_betterNetrunningBreachedNPCs;
 
   // Filter programs in reverse order to safely remove elements
-  let i: Int32 = ArraySize(Deref(programs)) - 1;
+  let removedCount: Int32 = 0;
+  i = ArraySize(Deref(programs)) - 1;
   while i >= 0 {
     let actionID: TweakDBID = Deref(programs)[i].actionID;
     let miniGameActionRecord: wref<MinigameAction_Record> = TweakDBInterface.GetMinigameActionRecord(actionID);
@@ -72,12 +96,15 @@ let dnrSubnetsBreached: Bool = IsDefined(devPS)
         || ShouldRemoveDeviceTypePrograms(actionID, miniGameActionRecord, data)
         || ShouldRemoveDataminePrograms(actionID) {
       ArrayErase(Deref(programs), i);
+      removedCount += 1;
     }
     i -= 1;
   };
-//PIERRE DNR
+  //PIERRE DNR
   this.ApplyDNRGating(programs, dnrSubnetsBreached);
   //PIERRE DNR
+
+  BNLog("[FilterPlayerPrograms] Removed " + ToString(removedCount) + " programs, final count: " + ToString(ArraySize(Deref(programs))));
 }
 
 // ==================== Program Filtering Functions ====================
@@ -147,8 +174,9 @@ public func ShouldRemoveNetworkPrograms(actionID: TweakDBID, connectedToNetwork:
 
 // Returns true if device-specific programs should be removed (for non-access-point devices)
 public func ShouldRemoveDeviceBackdoorPrograms(actionID: TweakDBID, entity: wref<GameObject>) -> Bool {
-  // Only applies to non-access-point devices
-  if !(IsDefined(entity as Device) && !IsDefined(entity as AccessPoint)) {
+  // Only applies to non-access-point, non-computer devices (Backdoor devices like Camera/Door)
+  // CRITICAL FIX: Exclude Computers - they should have full network access (same as Access Points)
+  if !DaemonFilterUtils.IsRegularDevice(entity) {
     return false;
   }
   return actionID == t"MinigameAction.NetworkDataMineLootAllMaster"
@@ -224,8 +252,47 @@ public func ShouldRemoveDNRNonNetrunnerPrograms(actionID: TweakDBID) -> Bool {
   return false;
 }
 
+// Returns true if already breached programs should be removed
+// CRITICAL: This removes daemons that were added by vanilla logic but already completed
+public func ShouldRemoveBreachedPrograms(actionID: TweakDBID, entity: wref<GameObject>) -> Bool {
+  // Only applies to devices (not NPCs)
+  if !IsDefined(entity as Device) {
+    return false;
+  }
+
+  let devicePS: ref<DeviceComponentPS> = (entity as Device).GetDevicePS();
+  let sharedPS: ref<SharedGameplayPS> = devicePS as SharedGameplayPS;
+
+  if !IsDefined(sharedPS) {
+    return false;
+  }
+
+  // Check each daemon type against breach status
+  if actionID == t"MinigameAction.UnlockQuickhacks" && sharedPS.m_betterNetrunningBreachedBasic {
+    return true;
+  }
+  if actionID == t"MinigameAction.UnlockNPCQuickhacks" && sharedPS.m_betterNetrunningBreachedNPCs {
+    return true;
+  }
+  if actionID == t"MinigameAction.UnlockCameraQuickhacks" && sharedPS.m_betterNetrunningBreachedCameras {
+    return true;
+  }
+  if actionID == t"MinigameAction.UnlockTurretQuickhacks" && sharedPS.m_betterNetrunningBreachedTurrets {
+    return true;
+  }
+
+  return false;
+}
+
 // Returns true if programs should be removed based on device type availability
 public func ShouldRemoveDeviceTypePrograms(actionID: TweakDBID, miniGameActionRecord: wref<MinigameAction_Record>, data: ConnectedClassTypes) -> Bool {
+  // In RadialUnlock mode, delegate filtering to RadialBreach's physical proximity-based system if installed
+  // If RadialBreach is not installed, disable network-based filtering to reduce UI noise
+  if !BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+    return false;
+  }
+
+  // In Classic mode, use traditional network connectivity-based filtering
   // Remove camera programs if no cameras connected
   if (Equals(miniGameActionRecord.Category().Type(), gamedataMinigameCategory.CameraAccess) || actionID == t"MinigameAction.UnlockCameraQuickhacks") && !data.surveillanceCamera {
     return true;
@@ -248,6 +315,15 @@ public func ShouldRemoveDataminePrograms(actionID: TweakDBID) -> Bool {
   }
   return Equals(actionID, t"MinigameAction.NetworkDataMineLootAllAdvanced")
       || Equals(actionID, t"MinigameAction.NetworkDataMineLootAll");
+}
+
+// ==================== Utility Functions ====================
+
+// Returns true if the action is a CustomHackingSystem RemoteBreach action
+public func IsCustomRemoteBreachAction(className: CName) -> Bool {
+  return Equals(className, n"BetterNetrunning.CustomHacking.RemoteBreachAction")
+      || Equals(className, n"BetterNetrunning.CustomHacking.VehicleRemoteBreachAction")
+      || Equals(className, n"BetterNetrunning.CustomHacking.DeviceRemoteBreachAction");
 }
 
 // ==================== Design Notes ====================
@@ -418,146 +494,274 @@ private final func AddCameraToggleAction(actions: script_ref<array<ref<DeviceAct
  * Applies progressive unlock restrictions to device quickhacks before breach
  * Checks player progression (Cyberdeck tier, Intelligence stat) and device type
  * to determine which quickhacks should be available before successful breach
+ *
+ * REFACTORED: Reduced from 100 lines with 6-level nesting to 25 lines with 2-level nesting
+ * Using Extract Method pattern to improve readability and maintainability
  */
 @addMethod(ScriptableDeviceComponentPS)
 public final func SetActionsInactiveUnbreached(actions: script_ref<array<ref<DeviceAction>>>) -> Void {
-  let sAction: ref<ScriptableDeviceAction>;
-  let i: Int32 = 0;
-  let isCamera: Bool = IsDefined(this as SurveillanceCameraControllerPS);
-  let isTurret: Bool = IsDefined(this as SecurityTurretControllerPS);
+  // Step 1: Get device classification
+  let deviceInfo: DeviceBreachInfo = this.GetDeviceBreachInfo();
 
-  // Check if this is a standalone device (no AccessPoint)
+  // Step 2: Update standalone device breach state (radial unlock)
+  this.UpdateStandaloneDeviceBreachState(deviceInfo);
+
+  // Step 3: Calculate device permissions based on breach state + progression
+  let permissions: DevicePermissions = this.CalculateDevicePermissions(deviceInfo);
+
+  // Step 4: Apply permissions to all actions
+  this.ApplyPermissionsToActions(actions, deviceInfo, permissions);
+}
+
+// Helper: Gets device classification and network status
+@addMethod(ScriptableDeviceComponentPS)
+private final func GetDeviceBreachInfo() -> DeviceBreachInfo {
+  let info: DeviceBreachInfo;
+  info.isCamera = DaemonFilterUtils.IsCamera(this);
+  info.isTurret = DaemonFilterUtils.IsTurret(this);
+
   let sharedPS: ref<SharedGameplayPS> = this;
-  let isStandaloneDevice: Bool = false;
-  let apCount: Int32 = 0;
   if IsDefined(sharedPS) {
     let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-    apCount = ArraySize(apControllers);
-    isStandaloneDevice = apCount == 0;
+    info.isStandaloneDevice = ArraySize(apControllers) == 0;
   }
 
-  // Log device info including entity name for debugging
-  let deviceEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
-  let deviceName: String = IsDefined(deviceEntity) ? ToString(deviceEntity.GetClassName()) : "Unknown";
+  return info;
+}
 
-  BNLog("SetActionsInactiveUnbreached: Device=" + deviceName + ", isStandaloneDevice=" + ToString(isStandaloneDevice) + ", apCount=" + ToString(apCount) + ", breachedBasic=" + ToString(this.m_betterNetrunningBreachedBasic));
-
-  // For standalone devices: check radial breach state (within radius of breached AP)
-  // CRITICAL: ShouldUnlockStandaloneDevice returns TRUE in two cases:
-  // 1. UnlockIfNoAccessPoint==true → Always unlock (no AP required)
-  // 2. UnlockIfNoAccessPoint==false → Only unlock if within radius of breached AP
-  // When unlocked via radial breach, treat as if the device was directly breached
-  if isStandaloneDevice && ShouldUnlockStandaloneDevice(this, this.GetGameInstance()) {
-    BNLog("SetActionsInactiveUnbreached: Standalone device unlocked via ShouldUnlockStandaloneDevice");
-
-    // PERSISTENCE FIX: Mark device as permanently breached to survive save/load
-    // This ensures standalone devices remain unlocked after game reload
-    if !this.m_betterNetrunningBreachedBasic {
-      this.m_betterNetrunningBreachedBasic = true;
-      BNLog("SetActionsInactiveUnbreached: PERSISTED breachedBasic=true to device");
-    }
-    if isCamera && !this.m_betterNetrunningBreachedCameras {
-      this.m_betterNetrunningBreachedCameras = true;
-    }
-    if isTurret && !this.m_betterNetrunningBreachedTurrets {
-      this.m_betterNetrunningBreachedTurrets = true;
-    }
+// Helper: Updates breach flags for standalone devices within radial breach radius
+@addMethod(ScriptableDeviceComponentPS)
+private final func UpdateStandaloneDeviceBreachState(deviceInfo: DeviceBreachInfo) -> Void {
+  // Only process standalone devices that are within radial breach radius
+  if !deviceInfo.isStandaloneDevice || !ShouldUnlockStandaloneDevice(this, this.GetGameInstance()) {
+    return;
   }
 
-  BNLog("SetActionsInactiveUnbreached: After standalone check - breachedBasic=" + ToString(this.m_betterNetrunningBreachedBasic));
+  // PERSISTENCE FIX: Mark device as permanently breached to survive save/load
+  if !this.m_betterNetrunningBreachedBasic {
+    this.m_betterNetrunningBreachedBasic = true;
+  }
+  if deviceInfo.isCamera && !this.m_betterNetrunningBreachedCameras {
+    this.m_betterNetrunningBreachedCameras = true;
+  }
+  if deviceInfo.isTurret && !this.m_betterNetrunningBreachedTurrets {
+    this.m_betterNetrunningBreachedTurrets = true;
+  }
+}
 
-  // Check progression requirements for each device type
-  // LOGIC: (Device is breached) OR (Player has sufficient progression)
-  // - If breached → Allow regardless of progression (breach reward)
-  // - If not breached → Allow only if progression requirements met
-  let allowCameras: Bool = this.m_betterNetrunningBreachedCameras || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysCameras(), BetterNetrunningSettings.ProgressionCyberdeckCameras(), BetterNetrunningSettings.ProgressionIntelligenceCameras());
-  let allowTurrets: Bool = this.m_betterNetrunningBreachedTurrets || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysTurrets(), BetterNetrunningSettings.ProgressionCyberdeckTurrets(), BetterNetrunningSettings.ProgressionIntelligenceTurrets());
-  let allowBasicDevices: Bool = this.m_betterNetrunningBreachedBasic || ShouldUnlockHackDevice(this.GetGameInstance(), BetterNetrunningSettings.AlwaysBasicDevices(), BetterNetrunningSettings.ProgressionCyberdeckBasicDevices(), BetterNetrunningSettings.ProgressionIntelligenceBasicDevices());
+// Helper: Calculates permissions based on breach state and player progression
+@addMethod(ScriptableDeviceComponentPS)
+private final func CalculateDevicePermissions(deviceInfo: DeviceBreachInfo) -> DevicePermissions {
+  let permissions: DevicePermissions;
+  let gameInstance: GameInstance = this.GetGameInstance();
 
-  BNLog("SetActionsInactiveUnbreached: allowBasicDevices=" + ToString(allowBasicDevices) + ", allowCameras=" + ToString(allowCameras) + ", allowTurrets=" + ToString(allowTurrets));
+  // Device-type permissions: Breached OR progression requirements met
+  permissions.allowCameras = this.m_betterNetrunningBreachedCameras || ShouldUnlockHackDevice(gameInstance, BetterNetrunningSettings.AlwaysCameras(), BetterNetrunningSettings.ProgressionCyberdeckCameras(), BetterNetrunningSettings.ProgressionIntelligenceCameras());
+  permissions.allowTurrets = this.m_betterNetrunningBreachedTurrets || ShouldUnlockHackDevice(gameInstance, BetterNetrunningSettings.AlwaysTurrets(), BetterNetrunningSettings.ProgressionCyberdeckTurrets(), BetterNetrunningSettings.ProgressionIntelligenceTurrets());
+  permissions.allowBasicDevices = this.m_betterNetrunningBreachedBasic || ShouldUnlockHackDevice(gameInstance, BetterNetrunningSettings.AlwaysBasicDevices(), BetterNetrunningSettings.ProgressionCyberdeckBasicDevices(), BetterNetrunningSettings.ProgressionIntelligenceBasicDevices());
 
-  // Check special always-allowed quickhacks
-  let allowPing: Bool = BetterNetrunningSettings.AlwaysAllowPing();
-  let allowDistraction: Bool = BetterNetrunningSettings.AlwaysAllowDistract();
+  // Special always-allowed quickhacks
+  permissions.allowPing = BetterNetrunningSettings.AlwaysAllowPing();
+  permissions.allowDistraction = BetterNetrunningSettings.AlwaysAllowDistract();
 
-  // Set quickhacks inactive if progression requirements not met
+  return permissions;
+}
+
+// Helper: Applies calculated permissions to all actions
+@addMethod(ScriptableDeviceComponentPS)
+private final func ApplyPermissionsToActions(actions: script_ref<array<ref<DeviceAction>>>, deviceInfo: DeviceBreachInfo, permissions: DevicePermissions) -> Void {
+  let i: Int32 = 0;
   while i < ArraySize(Deref(actions)) {
-    sAction = (Deref(actions)[i] as ScriptableDeviceAction);
+    let sAction: ref<ScriptableDeviceAction> = (Deref(actions)[i] as ScriptableDeviceAction);
 
-    // Determine if this action should be allowed based on device type and progression
-    let shouldAllow: Bool = false;
-
-    // Check special quickhacks that bypass device type checks
-    let isPing: Bool = Equals(sAction.GetClassName(), n"PingDevice");
-    let isDistract: Bool = Equals(sAction.GetClassName(), n"QuickHackDistraction");
-
-    // CRITICAL: Use independent if statements, not else-if chain
-    // This ensures device-type checks are evaluated regardless of quickhack type
-
-    // Always-allowed quickhacks
-    if isPing && allowPing {
-      shouldAllow = true;
-    }
-    if isDistract && allowDistraction {
-      shouldAllow = true;
-    }
-
-    // Device-type-specific permissions (checked independently)
-    if isCamera && allowCameras {
-      shouldAllow = true;
-    }
-    if isTurret && allowTurrets {
-      shouldAllow = true;
-    }
-    if !isCamera && !isTurret && allowBasicDevices {
-      // Basic devices (Speaker, Radio, Computer, etc.)
-      // Only allow if progression requirements met OR already breached
-      shouldAllow = true;
-    }
-
-    // Set inactive if not allowed
-    if !shouldAllow {
+    if IsDefined(sAction) && !this.ShouldAllowAction(sAction, deviceInfo.isCamera, deviceInfo.isTurret, permissions.allowCameras, permissions.allowTurrets, permissions.allowBasicDevices, permissions.allowPing, permissions.allowDistraction) {
       sAction.SetInactive();
       sAction.SetInactiveReason("LocKey#7021");
     }
 
     i += 1;
-  };
+  }
+}
+
+// Helper: Determines if an action should be allowed based on device type and progression
+@addMethod(ScriptableDeviceComponentPS)
+private final func ShouldAllowAction(action: ref<ScriptableDeviceAction>, isCamera: Bool, isTurret: Bool, allowCameras: Bool, allowTurrets: Bool, allowBasicDevices: Bool, allowPing: Bool, allowDistraction: Bool) -> Bool {
+  let className: CName = action.GetClassName();
+
+  // RemoteBreachAction must ALWAYS be allowed (CustomHackingSystem integration)
+  if IsCustomRemoteBreachAction(className) {
+    return true;
+  }
+
+  // Always-allowed quickhacks
+  if Equals(className, n"PingDevice") && allowPing {
+    return true;
+  }
+  if Equals(className, n"QuickHackDistraction") && allowDistraction {
+    return true;
+  }
+
+  // Device-type-specific permissions
+  if isCamera && allowCameras {
+    return true;
+  }
+  if isTurret && allowTurrets {
+    return true;
+  }
+  if !isCamera && !isTurret && allowBasicDevices {
+    return true;
+  }
+
+  return false;
 }
 
 /*
  * Finalizes device quickhack actions before presenting to player
  * VANILLA DIFF: Removes IsBreached() check on ActionRemoteBreach() to allow breach action when not yet breached
  * Handles backdoor actions, power state checks, and RPG availability (including equipment check)
+ *
+ * ARCHITECTURE: Conditional compilation with shared logic extraction
+ * - @if(ModuleExists("HackingExtensions")): Custom RemoteBreach support
+ * - @if(!ModuleExists("HackingExtensions")): Fallback (no custom breach)
+ * - Common logic extracted to helper methods for maintainability
  */
+@if(ModuleExists("HackingExtensions"))
 @replaceMethod(ScriptableDeviceComponentPS)
 protected final func FinalizeGetQuickHackActions(outActions: script_ref<array<ref<DeviceAction>>>, const context: script_ref<GetActionsContext>) -> Void {
+  // Common early exit checks
+  if !this.ShouldProcessQuickHackActions(outActions) {
+    return;
+  }
+
+  // Add backdoor breach and ping actions (with Custom RemoteBreach)
+  if this.IsConnectedToBackdoorDevice() {
+    this.TryAddCustomRemoteBreach(outActions);
+    this.AddPingAction(outActions);
+  } else if this.HasNetworkBackdoor() {
+    this.AddPingAction(outActions);
+  }
+
+  // Apply common restrictions (power state, RPG checks, illegality, etc.)
+  this.ApplyCommonQuickHackRestrictions(outActions, context);
+
+  // NOTE: MoveVehicleRemoteBreachToBottom is NOT called here
+  // It must be called in GetRemoteActions AFTER all @wrapMethod processing completes
+}
+
+@if(!ModuleExists("HackingExtensions"))
+@replaceMethod(ScriptableDeviceComponentPS)
+protected final func FinalizeGetQuickHackActions(outActions: script_ref<array<ref<DeviceAction>>>, const context: script_ref<GetActionsContext>) -> Void {
+  // Common early exit checks
+  if !this.ShouldProcessQuickHackActions(outActions) {
+    return;
+  }
+
+  // Add backdoor breach and ping actions (vanilla RemoteBreach fallback)
+  if this.IsConnectedToBackdoorDevice() {
+    let currentAction: ref<ScriptableDeviceAction> = this.ActionRemoteBreach();
+    ArrayPush(Deref(outActions), currentAction);
+    this.AddPingAction(outActions);
+  } else if this.HasNetworkBackdoor() {
+    this.AddPingAction(outActions);
+  }
+
+  // Apply common restrictions (power state, RPG checks, illegality, etc.)
+  this.ApplyCommonQuickHackRestrictions(outActions, context);
+
+  // NOTE: MoveVehicleRemoteBreachToBottom is NOT needed for vanilla RemoteBreach
+}
+
+// ==================== Helper Methods (Shared Logic) ====================
+
+/*
+ * Wrapper for TryAddMissingCustomRemoteBreach (conditional compilation support)
+ * Only compiled when HackingExtensions module exists
+ */
+@if(ModuleExists("HackingExtensions"))
+@addMethod(ScriptableDeviceComponentPS)
+private final func TryAddMissingCustomRemoteBreachWrapper(outActions: script_ref<array<ref<DeviceAction>>>) -> Void {
+  this.TryAddMissingCustomRemoteBreach(outActions);
+}
+
+/*
+ * Stub wrapper when HackingExtensions module does not exist
+ */
+@if(!ModuleExists("HackingExtensions"))
+@addMethod(ScriptableDeviceComponentPS)
+private final func TryAddMissingCustomRemoteBreachWrapper(outActions: script_ref<array<ref<DeviceAction>>>) -> Void {
+  // No-op: CustomHackingSystem not installed
+}
+
+/*
+ * Common early exit checks for FinalizeGetQuickHackActions
+ * Returns true if processing should continue, false if should exit early
+ */
+@addMethod(ScriptableDeviceComponentPS)
+private final func ShouldProcessQuickHackActions(outActions: script_ref<array<ref<DeviceAction>>>) -> Bool {
   // Early exit if device is not in nominal state
   if NotEquals(this.GetDurabilityState(), EDeviceDurabilityState.NOMINAL) {
-    return;
+    return false;
   }
   // Early exit if quickhacks are disabled
   if this.m_disableQuickHacks {
     if ArraySize(Deref(outActions)) > 0 {
       ArrayClear(Deref(outActions));
     }
-    return;
+    return false;
   }
+  return true;
+}
 
-  // Add backdoor breach and ping actions
-  if this.IsConnectedToBackdoorDevice() {
-    let currentAction: ref<ScriptableDeviceAction>;
-    currentAction = this.ActionRemoteBreach();
-    ArrayPush(Deref(outActions), currentAction);
-    currentAction = this.ActionPing();
-    currentAction.SetInactiveWithReason(!this.GetNetworkSystem().HasActivePing(this.GetMyEntityID()), "LocKey#49279");
-    ArrayPush(Deref(outActions), currentAction);
-  } else if this.HasNetworkBackdoor() {
-    let currentAction: ref<ScriptableDeviceAction> = this.ActionPing();
-    currentAction.SetInactiveWithReason(!this.GetNetworkSystem().HasActivePing(this.GetMyEntityID()), "LocKey#49279");
-    ArrayPush(Deref(outActions), currentAction);
+/*
+ * Adds Ping action to backdoor device
+ * Common logic shared by both conditional compilation versions
+ */
+@addMethod(ScriptableDeviceComponentPS)
+private final func AddPingAction(outActions: script_ref<array<ref<DeviceAction>>>) -> Void {
+  let currentAction: ref<ScriptableDeviceAction> = this.ActionPing();
+  currentAction.SetInactiveWithReason(!this.GetNetworkSystem().HasActivePing(this.GetMyEntityID()), "LocKey#49279");
+  ArrayPush(Deref(outActions), currentAction);
+}
+
+/*
+ * Override MarkActionsAsQuickHacks to support CustomAccessBreach
+ * CRITICAL FIX: CustomAccessBreach extends PuppetAction, not ScriptableDeviceAction,
+ * so vanilla MarkActionsAsQuickHacks skips it. This causes RemoteBreach to not appear in UI.
+ *
+ * MOD COMPATIBILITY: Changed from @replaceMethod to @wrapMethod for better compatibility.
+ * Vanilla processing is preserved, CustomAccessBreach support is added as extension.
+ */
+@if(ModuleExists("HackingExtensions"))
+@wrapMethod(ScriptableDeviceComponentPS)
+protected final func MarkActionsAsQuickHacks(actionsToMark: script_ref<array<ref<DeviceAction>>>) -> Void {
+  // Execute vanilla logic first (handles all ScriptableDeviceAction)
+  wrappedMethod(actionsToMark);
+
+  // EXTENSION: Add CustomAccessBreach support (BetterNetrunning-specific)
+  let i: Int32 = 0;
+  while i < ArraySize(Deref(actionsToMark)) {
+    // CRITICAL: Also check for CustomAccessBreach (CustomHackingSystem actions)
+    // CustomAccessBreach extends PuppetAction, not ScriptableDeviceAction
+    let customBreachAction: ref<CustomAccessBreach> = Deref(actionsToMark)[i] as CustomAccessBreach;
+    if IsDefined(customBreachAction) {
+      // CustomAccessBreach doesn't have SetAsQuickHack(), but PuppetAction does
+      // Cast to PuppetAction to access the method
+      let puppetAction: ref<PuppetAction> = customBreachAction as PuppetAction;
+      if IsDefined(puppetAction) {
+        puppetAction.SetAsQuickHack();
+      }
+    }
+
+    i += 1;
   }
+}
 
+/*
+ * Applies common quickhack restrictions (power state, RPG checks, illegality)
+ * Common logic shared by both conditional compilation versions
+ */
+@addMethod(ScriptableDeviceComponentPS)
+private final func ApplyCommonQuickHackRestrictions(outActions: script_ref<array<ref<DeviceAction>>>, const context: script_ref<GetActionsContext>) -> Void {
   // Disable all actions if device is unpowered
   if this.IsUnpowered() {
     ScriptableDeviceComponentPS.SetActionsInactiveAll(outActions, "LocKey#7013");
@@ -568,6 +772,13 @@ protected final func FinalizeGetQuickHackActions(outActions: script_ref<array<re
   this.SetActionIllegality(outActions, this.m_illegalActions.quickHacks);
   this.MarkActionsAsQuickHacks(outActions);
   this.SetActionsQuickHacksExecutioner(outActions);
+
+  // NEW REQUIREMENT: Remove Custom RemoteBreach if device is already unlocked
+  // This must be called AFTER all actions are added to prevent re-adding
+  this.RemoveCustomRemoteBreachIfUnlocked(outActions);
+
+  // NOTE: MoveVehicleRemoteBreachToBottom is NOT called here
+  // It must be called AFTER TryAddCustomRemoteBreach in FinalizeGetQuickHackActions
 }
 
 /*
@@ -596,6 +807,37 @@ public final func GetRemoteActions(out outActions: array<ref<DeviceAction>>, con
   // Get quickhack actions from device
   this.GetQuickHackActions(outActions, context);
 
+  // CRITICAL FIX: Some devices (Jukebox, NetrunnerChair, DisposalDevice) override GetQuickHackActions()
+  // without calling wrappedMethod(), causing TweakDB RemoteBreach to not be removed.
+  // Remove ALL vanilla RemoteBreach actions here as a final cleanup step.
+  let i: Int32 = ArraySize(outActions) - 1;
+  let hasCustomRemoteBreach: Bool = false;
+
+  while i >= 0 {
+    let action: ref<DeviceAction> = outActions[i];
+    if IsDefined(action) && Equals(action.actionName, n"RemoteBreach") {
+      let className: CName = action.GetClassName();
+      let isCustomAction: Bool = IsCustomRemoteBreachAction(className);
+
+      if isCustomAction {
+        hasCustomRemoteBreach = true;
+      } else {
+        ArrayErase(outActions, i);
+      }
+    }
+    i -= 1;
+  }
+
+  // CRITICAL FIX: Add Custom RemoteBreach if not present (for devices that don't call wrappedMethod)
+  // This ensures NetrunnerChair, Jukebox, DisposalDevice, TV, etc. get Custom RemoteBreach
+  if !hasCustomRemoteBreach && !BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+    this.TryAddMissingCustomRemoteBreachWrapper(outActions);
+  }
+
+  // NEW REQUIREMENT: Remove Custom RemoteBreach if device is already unlocked (except Vehicles)
+  // Vehicles always show RemoteBreach regardless of unlock state
+  this.RemoveCustomRemoteBreachIfUnlocked(outActions);
+
   // Check if network has no access points (unsecured network)
   let sharedPS: ref<SharedGameplayPS> = this;
   let hasAccessPoint: Bool = true;
@@ -607,26 +849,23 @@ public final func GetRemoteActions(out outActions: array<ref<DeviceAction>>, con
   }
 
   // CRITICAL FIX: Correct logic for unsecured network
-  // UnlockIfNoAccessPoint = true → Devices without AP are always unlocked (no restrictions)
-  // UnlockIfNoAccessPoint = false → Devices without AP require breach (restrictions apply)
+  // UnlockIfNoAccessPoint = true -> Devices without AP are always unlocked (no restrictions)
+  // UnlockIfNoAccessPoint = false -> Devices without AP require breach (restrictions apply)
   let isUnsecuredNetwork: Bool = !hasAccessPoint && BetterNetrunningSettings.UnlockIfNoAccessPoint();
-
-  let deviceEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
-  let deviceName: String = IsDefined(deviceEntity) ? ToString(deviceEntity.GetClassName()) : "Unknown";
-  BNLog("GetRemoteActions: Device=" + deviceName + ", hasAccessPoint=" + ToString(hasAccessPoint) + ", apCount=" + ToString(apCount) + ", UnlockIfNoAccessPoint=" + ToString(BetterNetrunningSettings.UnlockIfNoAccessPoint()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork));
 
   // Handle sequencer lock or breach state
   if this.IsLockedViaSequencer() {
     // Sequencer locked: only allow RemoteBreach action
     ScriptableDeviceComponentPS.SetActionsInactiveAll(outActions, "LocKey#7021", n"RemoteBreach");
-    BNLog("GetRemoteActions: Sequencer locked");
   } else if !BetterNetrunningSettings.EnableClassicMode() && !isUnsecuredNetwork {
     // Progressive Mode: apply device-type-specific unlock restrictions (unless unsecured network)
-    BNLog("GetRemoteActions: Applying progressive unlock restrictions");
     this.SetActionsInactiveUnbreached(outActions);
-  } else {
-    BNLog("GetRemoteActions: No restrictions (ClassicMode=" + ToString(BetterNetrunningSettings.EnableClassicMode()) + ", isUnsecuredNetwork=" + ToString(isUnsecuredNetwork) + ")");
   }
+
+  // CRITICAL FIX: Move Vehicle RemoteBreach to bottom AFTER all processing
+  // This must be the LAST operation to ensure RemoteBreach stays at bottom
+  this.MoveVehicleRemoteBreachToBottom(outActions);
+
   // If isUnsecuredNetwork == true, all quickhacks remain active (no restrictions applied)
 }
 
@@ -653,34 +892,23 @@ public const func CanRevealRemoteActionsWheel() -> Bool {
  *
  * ARCHITECTURE:
  * - Progressive unlock via ShouldUnlockHackNPC() (checks Cyberdeck tier, Intelligence, Enemy Rarity)
- * - Network isolation detection → auto-unlock for isolated NPCs
+ * - Network isolation detection -> auto-unlock for isolated NPCs
  * - Category-based restrictions (Covert, Combat, Control, Ultimate, Ping, Whistle)
+ *
+ * REFACTORED: Reduced from 58 lines with 3-level nesting to 45 lines with 2-level nesting
+ * Using Extract Method pattern for permission calculation
  */
 @replaceMethod(ScriptedPuppetPS)
 public final const func GetAllChoices(const actions: script_ref<array<wref<ObjectAction_Record>>>, const context: script_ref<GetActionsContext>, puppetActions: script_ref<array<ref<PuppetAction>>>) -> Void {
-  let attiudeTowardsPlayer: EAIAttitude = this.GetOwnerEntity().GetAttitudeTowards(GetPlayer(this.GetGameInstance()));
+  // Step 1: Calculate NPC permissions (breach state + progression)
+  let permissions: NPCHackPermissions = this.CalculateNPCHackPermissions();
+
+  // Step 2: Get activity state
   let isPuppetActive: Bool = ScriptedPuppet.IsActive(this.GetOwnerEntity());
+  let attiudeTowardsPlayer: EAIAttitude = this.GetOwnerEntity().GetAttitudeTowards(GetPlayer(this.GetGameInstance()));
   let instigator: wref<GameObject> = Deref(context).processInitiatorObject;
 
-  // Check breach status (m_quickHacksExposed is breach state, not menu visibility)
-  let isBreached: Bool = this.m_quickHacksExposed;
-
-  // Check if NPC is connected to any network
-  let isConnectedToNetwork: Bool = this.IsConnectedToAccessPoint();
-
-  // Auto-unlock if not connected to any network (isolated enemies)
-  if !isConnectedToNetwork {
-    isBreached = true;
-  }
-
-  // Evaluate progression-based unlock conditions for hack categories
-  let allowCovert: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCovert());
-  let allowCombat: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsCombat(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCombat(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCombat(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCombat());
-  let allowControl: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsControl(), BetterNetrunningSettings.ProgressionCyberdeckNPCsControl(), BetterNetrunningSettings.ProgressionIntelligenceNPCsControl(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsControl());
-  let allowUltimate: Bool = ShouldUnlockHackNPC(this.GetGameInstance(), this.GetOwnerEntityWeak(), BetterNetrunningSettings.AlwaysNPCsUltimate(), BetterNetrunningSettings.ProgressionCyberdeckNPCsUltimate(), BetterNetrunningSettings.ProgressionIntelligenceNPCsUltimate(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsUltimate());
-  let allowPing: Bool = BetterNetrunningSettings.AlwaysAllowPing() || allowCovert;
-  let allowWhistle: Bool = BetterNetrunningSettings.AlwaysAllowWhistle() || allowCovert;
-
+  // Step 3: Process all actions
   let i: Int32 = 0;
   while i < ArraySize(Deref(actions)) {
     if this.IsRemoteQuickHackAction(Deref(actions)[i], context) {
@@ -688,7 +916,7 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
 
       if puppetAction.IsQuickHack() {
         // Apply progressive unlock restrictions
-        if this.ShouldQuickhackBeInactive(puppetAction, isBreached, allowCovert, allowCombat, allowControl, allowUltimate, allowPing, allowWhistle) {
+        if this.ShouldQuickhackBeInactive(puppetAction, permissions) {
           this.SetQuickhackInactiveReason(puppetAction, attiudeTowardsPlayer);
         } else if !isPuppetActive || this.Sts_Ep1_12_ActiveForQHack_Hack() {
           puppetAction.SetInactiveWithReason(false, "LocKey#7018");
@@ -698,6 +926,35 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
     }
     i += 1;
   }
+}
+
+// Helper: Calculates NPC hack permissions based on breach state and progression
+@addMethod(ScriptedPuppetPS)
+private final func CalculateNPCHackPermissions() -> NPCHackPermissions {
+  let permissions: NPCHackPermissions;
+  let gameInstance: GameInstance = this.GetGameInstance();
+  let npc: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
+
+  // Check breach status (m_quickHacksExposed is breach state, not menu visibility)
+  permissions.isBreached = this.m_quickHacksExposed;
+
+  // Check if NPC is connected to any network
+  let isConnectedToNetwork: Bool = this.IsConnectedToAccessPoint();
+
+  // Auto-unlock if not connected to any network (isolated enemies)
+  if !isConnectedToNetwork {
+    permissions.isBreached = true;
+  }
+
+  // Evaluate progression-based unlock conditions for hack categories
+  permissions.allowCovert = ShouldUnlockHackNPC(gameInstance, npc, BetterNetrunningSettings.AlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCovert());
+  permissions.allowCombat = ShouldUnlockHackNPC(gameInstance, npc, BetterNetrunningSettings.AlwaysNPCsCombat(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCombat(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCombat(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCombat());
+  permissions.allowControl = ShouldUnlockHackNPC(gameInstance, npc, BetterNetrunningSettings.AlwaysNPCsControl(), BetterNetrunningSettings.ProgressionCyberdeckNPCsControl(), BetterNetrunningSettings.ProgressionIntelligenceNPCsControl(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsControl());
+  permissions.allowUltimate = ShouldUnlockHackNPC(gameInstance, npc, BetterNetrunningSettings.AlwaysNPCsUltimate(), BetterNetrunningSettings.ProgressionCyberdeckNPCsUltimate(), BetterNetrunningSettings.ProgressionIntelligenceNPCsUltimate(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsUltimate());
+  permissions.allowPing = BetterNetrunningSettings.AlwaysAllowPing() || permissions.allowCovert;
+  permissions.allowWhistle = BetterNetrunningSettings.AlwaysAllowWhistle() || permissions.allowCovert;
+
+  return permissions;
 }
 
 // Helper: Checks if action is a remote quickhack type
@@ -728,32 +985,32 @@ private final func CreatePuppetAction(action: wref<ObjectAction_Record>, instiga
 
 // Helper: Determines if quickhack should be inactive based on progression requirements
 @addMethod(ScriptedPuppetPS)
-private final func ShouldQuickhackBeInactive(puppetAction: ref<PuppetAction>, isBreached: Bool, allowCovert: Bool, allowCombat: Bool, allowControl: Bool, allowUltimate: Bool, allowPing: Bool, allowWhistle: Bool) -> Bool {
+private final func ShouldQuickhackBeInactive(puppetAction: ref<PuppetAction>, permissions: NPCHackPermissions) -> Bool {
   // All hacks available if breached or whitelisted
-  if isBreached || this.IsWhiteListedForHacks() {
+  if permissions.isBreached || this.IsWhiteListedForHacks() {
     return false;
   }
 
   // Check hack category against progression requirements
   let hackCategory: CName = puppetAction.GetObjectActionRecord().HackCategory().EnumName();
-  if Equals(hackCategory, n"CovertHack") && allowCovert {
+  if Equals(hackCategory, n"CovertHack") && permissions.allowCovert {
     return false;
   }
-  if Equals(hackCategory, n"DamageHack") && allowCombat {
+  if Equals(hackCategory, n"DamageHack") && permissions.allowCombat {
     return false;
   }
-  if Equals(hackCategory, n"ControlHack") && allowControl {
+  if Equals(hackCategory, n"ControlHack") && permissions.allowControl {
     return false;
   }
-  if Equals(hackCategory, n"UltimateHack") && allowUltimate {
+  if Equals(hackCategory, n"UltimateHack") && permissions.allowUltimate {
     return false;
   }
 
   // Check special always-allowed quickhacks
-  if IsDefined(puppetAction as PingSquad) && allowPing {
+  if IsDefined(puppetAction as PingSquad) && permissions.allowPing {
     return false;
   }
-  if Equals(puppetAction.GetObjectActionRecord().ActionName(), n"Whistle") && allowWhistle {
+  if Equals(puppetAction.GetObjectActionRecord().ActionName(), n"Whistle") && permissions.allowWhistle {
     return false;
   }
 
@@ -830,23 +1087,13 @@ protected func OnIncapacitated() -> Void {
 
 /*
  * Disconnects NPCs from network upon death
- * VANILLA DIFF: Calls this.RemoveLink() to disconnect from network (vanilla also does this)
+ * VANILLA DIFF: Identical to vanilla behavior (removed @replaceMethod for better mod compatibility)
+ *
+ * MOD COMPATIBILITY: This method is no longer overridden as it's identical to vanilla.
+ * Better Netrunning now delegates death handling to vanilla logic.
  */
-@replaceMethod(ScriptedPuppet)
-protected func OnDied() -> Void {
-  StatusEffectHelper.RemoveStatusEffect(this, t"BaseStatusEffect.Defeated");
-  this.GetPuppetPS().SetIsDead(true);
-  this.OnIncapacitated();
-  // Remove network link on death
-  this.RemoveLink();
-  let link: ref<PuppetDeviceLinkPS> = this.GetDeviceLink() as PuppetDeviceLinkPS;
-  if IsDefined(link) {
-    link.NotifyAboutSpottingPlayer(false);
-    GameInstance.GetPersistencySystem(this.GetGame()).QueuePSEvent(link.GetID(), link.GetClassName(), new DestroyLink());
-  }
-  CachedBoolValue.SetDirty(this.m_isActiveCached);
-  QuickHackableQueueHelper.RemoveQuickhackQueue(this.m_gameplayRoleComponent, this.m_currentlyUploadingAction);
-}
+// @replaceMethod(ScriptedPuppet)
+// REMOVED: This override is unnecessary (100% identical to vanilla)
 
 /*
  * Checks if device is connected to any access point controller
@@ -902,46 +1149,101 @@ public persistent let m_betterNetrunningBreachedTurrets: Bool;
  * - Radial unlock: Records breach position for standalone device support (50m radius)
  * - Network centroid: Calculates average position of all devices for accurate breach location
  * - Isolated NPC detection: Auto-unlocks NPCs not connected to any network
+ *
+ * REFACTORED: Reduced from 95 lines with 5-level nesting to 30 lines with 2-level nesting
+ * Using Composed Method pattern for improved readability
  */
 @replaceMethod(AccessPointControllerPS)
 private final func RefreshSlaves(const devices: script_ref<array<ref<DeviceComponentPS>>>) -> Void {
-  let minigameBB: ref<IBlackboard> = GameInstance.GetBlackboardSystem(this.GetGameInstance()).Get(GetAllBlackboardDefs().HackingMinigame);
+  // Step 1: Get active minigame programs from blackboard
+  let minigamePrograms: array<TweakDBID> = this.GetActiveMinigamePrograms();
+
+  // Step 2: Process breach programs and extract rewards
+  let lootResult: BreachLootResult = this.ProcessMinigamePrograms(minigamePrograms);
+
+  // Step 3: Update blackboard and reward player
+  this.UpdateMinigameBlackboard(minigamePrograms, lootResult);
+  this.ProcessLootRewards(lootResult);
+
+  // Step 4: Apply network-wide effects
+  this.ApplyNetworkEffects(devices, lootResult.unlockFlags);
+
+  // Step 5: Record breach position for radial unlock
+  this.RecordNetworkBreachPosition(devices);
+
+  // Step 6: Final rewards
+  this.ProcessFinalRewards(lootResult);
+}
+
+// Helper: Gets hacking minigame blackboard (centralized access)
+@addMethod(AccessPointControllerPS)
+private final func GetMinigameBlackboard() -> ref<IBlackboard> {
+  return GameInstance.GetBlackboardSystem(this.GetGameInstance()).Get(GetAllBlackboardDefs().HackingMinigame);
+}
+
+// Helper: Retrieves active minigame programs from blackboard
+@addMethod(AccessPointControllerPS)
+private final func GetActiveMinigamePrograms() -> array<TweakDBID> {
+  let minigameBB: ref<IBlackboard> = this.GetMinigameBlackboard();
   let minigamePrograms: array<TweakDBID> = FromVariant<array<TweakDBID>>(minigameBB.GetVariant(GetAllBlackboardDefs().HackingMinigame.ActivePrograms));
 
   this.CheckMasterRunnerAchievement(ArraySize(minigamePrograms));
   this.FilterRedundantPrograms(minigamePrograms);
 
-  // Process uploaded breach programs (loot + unlock)
-  let lootResult: BreachLootResult = this.ProcessMinigamePrograms(minigamePrograms);
-  let unlockFlags: BreachUnlockFlags = lootResult.unlockFlags;
+  return minigamePrograms;
+}
 
-  // Update blackboard to remove processed loot programs
-  if lootResult.markForErase {
-    ArrayErase(minigamePrograms, lootResult.eraseIndex);
-    minigameBB.SetVariant(GetAllBlackboardDefs().HackingMinigame.ActivePrograms, ToVariant(minigamePrograms));
+// Helper: Updates blackboard with processed programs
+@addMethod(AccessPointControllerPS)
+private final func UpdateMinigameBlackboard(minigamePrograms: array<TweakDBID>, lootResult: BreachLootResult) -> Void {
+  if !lootResult.markForErase {
+    return;
   }
 
-  // Reward loot items
-  if lootResult.shouldLoot {
-    this.ProcessLoot(lootResult.baseMoney, lootResult.craftingMaterial, lootResult.baseShardDropChance, GameInstance.GetTransactionSystem(this.GetGameInstance()));
+  ArrayErase(minigamePrograms, lootResult.eraseIndex);
+  this.GetMinigameBlackboard().SetVariant(GetAllBlackboardDefs().HackingMinigame.ActivePrograms, ToVariant(minigamePrograms));
+}
+
+// Helper: Processes and rewards loot items
+@addMethod(AccessPointControllerPS)
+private final func ProcessLootRewards(lootResult: BreachLootResult) -> Void {
+  if !lootResult.shouldLoot {
+    return;
   }
 
-  // Execute network-wide daemon effects
+  this.ProcessLoot(lootResult.baseMoney, lootResult.craftingMaterial, lootResult.baseShardDropChance, GameInstance.GetTransactionSystem(this.GetGameInstance()));
+}
+
+// Helper: Applies network-wide breach effects
+@addMethod(AccessPointControllerPS)
+private final func ApplyNetworkEffects(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
+  // Execute minigame actions on access point itself
   this.ProcessMinigameNetworkActions(this);
 
   // Mark directly breached NPC
-  let entity: wref<Entity> = FromVariant<wref<Entity>>(minigameBB.GetVariant(GetAllBlackboardDefs().HackingMinigame.Entity));
+  let entity: wref<Entity> = FromVariant<wref<Entity>>(this.GetMinigameBlackboard().GetVariant(GetAllBlackboardDefs().HackingMinigame.Entity));
   if IsDefined(entity as ScriptedPuppet) {
     (entity as ScriptedPuppet).GetPS().m_betterNetrunningWasDirectlyBreached = true;
   }
 
   // Apply device-type-specific unlock to all network devices
   this.ApplyBreachUnlockToDevices(devices, unlockFlags);
+}
 
-  // Record this AccessPoint's breach for radial unlock (standalone devices)
-  // STRATEGY: Calculate network centroid (average position of all devices)
-  // This provides a more accurate "network center" than using a single random device
+// Helper: Records network centroid position for radial unlock
+@addMethod(AccessPointControllerPS)
+private final func RecordNetworkBreachPosition(const devices: script_ref<array<ref<DeviceComponentPS>>>) -> Void {
+  let centroid: Vector4 = this.CalculateNetworkCentroid(devices);
 
+  // Only record if we found valid devices
+  if centroid.X >= -999000.0 {
+    RecordAccessPointBreachByPosition(centroid, this.GetGameInstance());
+  }
+}
+
+// Helper: Calculates average position of all network devices
+@addMethod(AccessPointControllerPS)
+private final func CalculateNetworkCentroid(const devices: script_ref<array<ref<DeviceComponentPS>>>) -> Vector4 {
   let sumX: Float = 0.0;
   let sumY: Float = 0.0;
   let sumZ: Float = 0.0;
@@ -962,42 +1264,21 @@ private final func RefreshSlaves(const devices: script_ref<array<ref<DeviceCompo
     i += 1;
   }
 
+  // Return centroid if valid, otherwise return invalid position
   if validDeviceCount > 0 {
-    // Calculate centroid (average position)
-    let centroidX: Float = sumX / Cast<Float>(validDeviceCount);
-    let centroidY: Float = sumY / Cast<Float>(validDeviceCount);
-    let centroidZ: Float = sumZ / Cast<Float>(validDeviceCount);
-    let centroid: Vector4 = Vector4(centroidX, centroidY, centroidZ, 1.0);
-
-    BNLog("RefreshSlaves: Recording breach using network centroid (" + ToString(centroidX) + ", " + ToString(centroidY) + ", " + ToString(centroidZ) + ") from " + ToString(validDeviceCount) + " devices");
-    RecordAccessPointBreachByPosition(centroid, this.GetGameInstance());
-  } else {
-    BNLog("RefreshSlaves: WARNING - Could not record breach - no valid device entities found in network");
+    return Vector4(sumX / Cast<Float>(validDeviceCount), sumY / Cast<Float>(validDeviceCount), sumZ / Cast<Float>(validDeviceCount), 1.0);
   }
 
-  // Final money reward
+  return Vector4(-999999.0, -999999.0, -999999.0, 1.0);
+}
+
+// Helper: Processes final rewards (money + XP)
+@addMethod(AccessPointControllerPS)
+private final func ProcessFinalRewards(lootResult: BreachLootResult) -> Void {
   if lootResult.baseMoney >= 1.00 && this.ShouldRewardMoney() {
     this.RewardMoney(lootResult.baseMoney);
   }
   RPGManager.GiveReward(this.GetGameInstance(), t"RPGActionRewards.Hacking", Cast<StatsObjectID>(this.GetMyEntityID()));
-}
-
-// Data structures for breach processing results
-public struct BreachUnlockFlags {
-  public let unlockBasic: Bool;
-  public let unlockNPCs: Bool;
-  public let unlockCameras: Bool;
-  public let unlockTurrets: Bool;
-}
-
-public struct BreachLootResult {
-  public let baseMoney: Float;
-  public let craftingMaterial: Bool;
-  public let baseShardDropChance: Float;
-  public let shouldLoot: Bool;
-  public let markForErase: Bool;
-  public let eraseIndex: Int32;
-  public let unlockFlags: BreachUnlockFlags;
 }
 
 // Helper: Processes all uploaded breach programs and extracts loot/unlock data
@@ -1065,7 +1346,8 @@ private final func ProcessUnlockProgram(programID: TweakDBID, flags: script_ref<
   }
 }
 
-// Helper: Applies device-type-specific unlock to all connected devices
+// Helper: Applies device-type-specific unlock to all connected devices (WITH RadialBreach)
+@if(ModuleExists("RadialBreach"))
 @addMethod(AccessPointControllerPS)
 private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
   let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
@@ -1074,6 +1356,47 @@ private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<re
   setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
   setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
 
+  // RadialBreach Integration - Physical Distance Filtering
+  let breachPosition: Vector4 = this.GetBreachPosition();
+  let maxDistance: Float = this.GetRadialBreachRange();
+  let shouldUseRadialFiltering: Bool = breachPosition.X >= -999000.0;
+
+  let i: Int32 = 0;
+  while i < ArraySize(Deref(devices)) {
+    let device: ref<DeviceComponentPS> = Deref(devices)[i];
+
+    // Physical distance check (RadialBreach integration)
+    let shouldUnlock: Bool = !shouldUseRadialFiltering || this.IsDeviceWithinBreachRadius(device, breachPosition, maxDistance);
+
+    if shouldUnlock {
+      // Classic mode: unlock all quickhacks on all devices
+      if BetterNetrunningSettings.EnableClassicMode() {
+        this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
+      }
+      // Progressive mode: unlock by device type
+      else {
+        this.ApplyDeviceTypeUnlock(device, unlockFlags);
+      }
+
+      this.ProcessMinigameNetworkActions(device);
+      this.QueuePSEvent(device, setBreachedSubnetEvent);
+    }
+
+    i += 1;
+  }
+}
+
+// Helper: Applies device-type-specific unlock to all connected devices (WITHOUT RadialBreach)
+@if(!ModuleExists("RadialBreach"))
+@addMethod(AccessPointControllerPS)
+private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
+  let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
+  setBreachedSubnetEvent.breachedBasic = unlockFlags.unlockBasic;
+  setBreachedSubnetEvent.breachedNPCs = unlockFlags.unlockNPCs;
+  setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
+  setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
+
+  // No RadialBreach filtering - unlock all devices in network
   let i: Int32 = 0;
   while i < ArraySize(Deref(devices)) {
     let device: ref<DeviceComponentPS> = Deref(devices)[i];
@@ -1093,34 +1416,95 @@ private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<re
   }
 }
 
-// Helper: Unlocks quickhacks based on device type
+// Helper: Unlocks quickhacks based on device type (using DeviceTypeUtils)
 @addMethod(AccessPointControllerPS)
 private final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
-  // NPCs and community proxies
-  if IsDefined(device as PuppetDeviceLinkPS) || IsDefined(device as CommunityProxyPS) {
-    if unlockFlags.unlockNPCs {
-      this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-    }
+  let sharedPS: ref<SharedGameplayPS> = device as SharedGameplayPS;
+  if !IsDefined(sharedPS) {
+    return;
   }
-  // Cameras
-  else if IsDefined(device.GetOwnerEntityWeak() as SurveillanceCamera) {
-    if unlockFlags.unlockCameras {
-      this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-    }
+
+  // Use DeviceTypeUtils for centralized device type detection
+  let deviceType: DeviceType = DeviceTypeUtils.GetDeviceType(device);
+
+  // Check if this device type should be unlocked based on flags
+  if !DeviceTypeUtils.ShouldUnlockByFlags(deviceType, unlockFlags) {
+    return;
   }
-  // Turrets
-  else if IsDefined(device.GetOwnerEntityWeak() as SecurityTurret) {
-    if unlockFlags.unlockTurrets {
-      this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-    }
-  }
-  // Basic devices
-  else {
-    if unlockFlags.unlockBasic {
-      this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-    }
-  }
+
+  // Unlock quickhacks and set breach flag
+  this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
+  DeviceTypeUtils.SetBreached(deviceType, sharedPS, true);
 }
+
+// ============================================================================
+// RADIALBREACH INTEGRATION HELPERS
+// ============================================================================
+
+// Gets the breach range from RadialBreach settings (or default 50m)
+// Automatically syncs with RadialBreach user configuration
+@if(ModuleExists("RadialBreach"))
+@addMethod(AccessPointControllerPS)
+private final func GetRadialBreachRange() -> Float {
+  // Reference RadialBreach's breachRange setting directly
+  // This automatically syncs with user's Native Settings UI configuration
+  let settings: ref<RadialBreachSettings> = new RadialBreachSettings();
+  return settings.breachRange;
+}
+
+// Fallback when RadialBreach is not installed - use default 50m
+@if(!ModuleExists("RadialBreach"))
+@addMethod(AccessPointControllerPS)
+private final func GetRadialBreachRange() -> Float {
+  return 50.0; // Default range when RadialBreach not installed
+}
+
+// Gets the breach position (AccessPoint position or player position as fallback)
+@addMethod(AccessPointControllerPS)
+private final func GetBreachPosition() -> Vector4 {
+  // Try to get AccessPoint entity position
+  let apEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
+  if IsDefined(apEntity) {
+    let position: Vector4 = apEntity.GetWorldPosition();
+      return position;
+  }
+
+  // Fallback: player position
+  let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
+  if IsDefined(player) {
+    let position: Vector4 = player.GetWorldPosition();
+      return position;
+  }
+
+  // ✁EFIXED: Error signal instead of zero vector to prevent filtering all devices
+  // Zero vector would cause all devices to be filtered out (distance > 50m from world origin)
+  BNLog("[GetBreachPosition] ERROR: Could not get breach position, returning error signal");
+  return Vector4(-999999.0, -999999.0, -999999.0, 1.0);
+}
+
+// Checks if a device is within breach radius
+@addMethod(AccessPointControllerPS)
+private final func IsDeviceWithinBreachRadius(device: ref<DeviceComponentPS>, breachPosition: Vector4, maxDistance: Float) -> Bool {
+  let deviceEntity: wref<GameObject> = device.GetOwnerEntityWeak() as GameObject;
+  if !IsDefined(deviceEntity) {
+      return true; // Fallback: allow unlock if entity not found
+  }
+
+  let devicePosition: Vector4 = deviceEntity.GetWorldPosition();
+  let distance: Float = Vector4.Distance(breachPosition, devicePosition);
+
+  let withinRadius: Bool = distance <= maxDistance;
+
+  if withinRadius {
+    } else {
+    }
+
+  return withinRadius;
+}
+
+// ============================================================================
+// END RADIALBREACH INTEGRATION
+// ============================================================================
 
 /*
  * Injects progressive unlock programs into breach minigame
@@ -1129,54 +1513,71 @@ private final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockF
  */
 @addMethod(MinigameGenerationRuleScalingPrograms)
 public final func InjectBetterNetrunningPrograms(programs: script_ref<array<MinigameProgramData>>) -> Void {
+
   if BetterNetrunningSettings.EnableClassicMode() {
-    return;
+      return;
   }
 
   // Get target device state
   let device: ref<SharedGameplayPS>;
   if IsDefined(this.m_entity as ScriptedPuppet) {
     device = (this.m_entity as ScriptedPuppet).GetPS().GetDeviceLink();
-  } else {
+    } else {
     device = (this.m_entity as Device).GetDevicePS();
+    }
+
+  if !IsDefined(device) {
+    BNLog("[InjectBetterNetrunningPrograms] ERROR: device (SharedGameplayPS) is null!");
+    return;
   }
 
   // Determine breach point type
   let isAccessPoint: Bool = IsDefined(this.m_entity as AccessPoint);
-  let isBackdoor: Bool = !isAccessPoint && IsDefined(this.m_entity as Device) && (this.m_entity as Device).GetDevicePS().IsConnectedToBackdoorDevice();
   let isUnconsciousNPC: Bool = IsDefined(this.m_entity as ScriptedPuppet);
   let isNetrunner: Bool = isUnconsciousNPC && (this.m_entity as ScriptedPuppet).IsNetrunnerPuppet();
 
+  // CRITICAL FIX: Remote breach support (CustomHackingSystem integration)
+  // Remote breach should behave like Access Point breach (full network access)
+  // PRIORITY: Check isComputer BEFORE isBackdoor to avoid misclassification
+  let devicePS: ref<ScriptableDeviceComponentPS> = (this.m_entity as Device).GetDevicePS();
+  let isComputer: Bool = IsDefined(devicePS) && DaemonFilterUtils.IsComputer(devicePS);
+
+  // CRITICAL FIX: Backdoor check must EXCLUDE Computers
+  // Computers can be connected to backdoor network, but should NOT be treated as backdoor breach points
+  let isBackdoor: Bool = !isAccessPoint && !isComputer && IsDefined(this.m_entity as Device) && (this.m_entity as Device).GetDevicePS().IsConnectedToBackdoorDevice();
+
   // Add unlock programs for un-breached device types
   // Netrunners have full access (all systems)
-  // Turrets: Access Points or Netrunners
-  if !device.m_betterNetrunningBreachedTurrets && (isAccessPoint || isNetrunner) {
+  // Computers: Full network access (same as Access Points via Remote Breach)
+  // Turrets: Access Points, Computers, or Netrunners
+  if !device.m_betterNetrunningBreachedTurrets && (isAccessPoint || isComputer || isNetrunner) {
     let turretAccessProgram: MinigameProgramData;
     turretAccessProgram.actionID = t"MinigameAction.UnlockTurretQuickhacks";
     turretAccessProgram.programName = n"LocKey#34844";
     ArrayInsert(Deref(programs), 0, turretAccessProgram);
-  }
-  // Cameras: Access Points, Backdoors, or Netrunners
-  if !device.m_betterNetrunningBreachedCameras && (isAccessPoint || isBackdoor || isNetrunner) {
+    }
+  // Cameras: Access Points, Computers, Backdoors, or Netrunners
+  if !device.m_betterNetrunningBreachedCameras && (isAccessPoint || isComputer || isBackdoor || isNetrunner) {
     let cameraAccessProgram: MinigameProgramData;
     cameraAccessProgram.actionID = t"MinigameAction.UnlockCameraQuickhacks";
     cameraAccessProgram.programName = n"LocKey#34844";
     ArrayInsert(Deref(programs), 0, cameraAccessProgram);
-  }
-  // NPCs: Access Points, Unconscious NPCs, or Netrunners
-  if !device.m_betterNetrunningBreachedNPCs && (isAccessPoint || isUnconsciousNPC || isNetrunner) {
+    }
+  // NPCs: Access Points, Computers, Unconscious NPCs, or Netrunners
+  if !device.m_betterNetrunningBreachedNPCs && (isAccessPoint || isComputer || isUnconsciousNPC || isNetrunner) {
     let npcAccessProgram: MinigameProgramData;
     npcAccessProgram.actionID = t"MinigameAction.UnlockNPCQuickhacks";
     npcAccessProgram.programName = n"LocKey#34844";
     ArrayInsert(Deref(programs), 0, npcAccessProgram);
-  }
+    }
   // Basic: All breach points
   if !device.m_betterNetrunningBreachedBasic {
     let basicAccessProgram: MinigameProgramData;
     basicAccessProgram.actionID = t"MinigameAction.UnlockQuickhacks";
     basicAccessProgram.programName = n"LocKey#34844";
     ArrayInsert(Deref(programs), 0, basicAccessProgram);
-  }
+    }
+
 }
 
 /*
@@ -1213,11 +1614,16 @@ public final const func CheckConnectedClassTypes() -> ConnectedClassTypes {
     if data.surveillanceCamera && data.securityTurret && data.puppet {
       break;
     }
-    if !data.surveillanceCamera && IsDefined(slaves[i] as SurveillanceCameraControllerPS) {
-      data.surveillanceCamera = true;
-    } else if !data.securityTurret && IsDefined(slaves[i] as SecurityTurretControllerPS) {
-      data.securityTurret = true;
-    } else if !data.puppet && IsDefined(slaves[i] as PuppetDeviceLinkPS) {
+    // Cast DeviceComponentPS to ScriptableDeviceComponentPS for DaemonFilterUtils
+    let slavePS: ref<ScriptableDeviceComponentPS> = slaves[i] as ScriptableDeviceComponentPS;
+    if IsDefined(slavePS) {
+      if !data.surveillanceCamera && DaemonFilterUtils.IsCamera(slavePS) {
+        data.surveillanceCamera = true;
+      } else if !data.securityTurret && DaemonFilterUtils.IsTurret(slavePS) {
+        data.securityTurret = true;
+      }
+    }
+    if !data.puppet && IsDefined(slaves[i] as PuppetDeviceLinkPS) {
       puppet = slaves[i].GetOwnerEntityWeak() as GameObject;
       if IsDefined(puppet) && puppet.IsActive() {
         data.puppet = true;
@@ -1273,7 +1679,7 @@ private final func RestoreTimeDilation() -> Void {
 // - Latest version: Changed to EnemyRarity for more granular control (intentional design change)
 //
 // RATIONALE: EnemyRarity provides better progression curve:
-// - Weak → Normal → Strong → Elite → Rare → Boss → MiniBoss → MaxTac
+// - Weak -> Normal -> Strong -> Elite -> Rare -> Boss -> MiniBoss -> MaxTac
 // - More nuanced than simple level ranges
 // - Aligned with vanilla game's enemy classification system
 
