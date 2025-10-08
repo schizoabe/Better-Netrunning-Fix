@@ -4,6 +4,7 @@ import BetterNetrunning.Common.*
 import BetterNetrunning.CustomHacking.*
 import BetterNetrunning.Minigame.*
 import BetterNetrunning.Progression.*
+import BetterNetrunning.RadialUnlock.*
 import BetterNetrunningConfig.*
 
 // ==================== MODULE ARCHITECTURE ====================
@@ -35,10 +36,13 @@ import BetterNetrunningConfig.*
 // - Common/Events.reds: Persistent field definitions, breach events
 // - Common/DaemonUtils.reds: Daemon filtering utilities
 // - Common/DeviceTypeUtils.reds: Device type detection
-// - Common/RadialBreachGating.reds: Radial breach system (50m radius)
-// - Common/RadialUnlockSystem.reds: Standalone device unlock tracking
 // - Common/DNRGating.reds: Daemon Netrunning Revamp integration
 // - Common/Logger.reds: Debug logging
+//
+// RADIAL UNLOCK SYSTEM:
+// - RadialUnlock/RadialUnlockSystem.reds: Position-based breach tracking (50m radius)
+// - RadialUnlock/RadialBreachGating.reds: RadialBreach MOD integration
+// - RadialUnlock/RemoteBreachNetworkUnlock.reds: RemoteBreach network unlock (Phase 1)
 //
 // CUSTOM HACKING SYSTEM:
 // - CustomHacking/*: RemoteBreach integration (9 files)
@@ -195,9 +199,10 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
 // Progression Checks:
 // - Progression/ProgressionSystem.reds: Cyberdeck/Intelligence/Rarity evaluation
 //
-// Radial Breach System:
-// - Common/RadialBreachGating.reds: 50m radius breach tracking
-// - Common/RadialUnlockSystem.reds: Standalone device unlock records
+// Radial Unlock System (50m breach radius):
+// - RadialUnlock/RadialUnlockSystem.reds: Position-based breach tracking
+// - RadialUnlock/RadialBreachGating.reds: RadialBreach MOD integration
+// - RadialUnlock/RemoteBreachNetworkUnlock.reds: RemoteBreach network unlock
 //
 // Persistent State:
 // - Common/Events.reds: Breach state fields and events

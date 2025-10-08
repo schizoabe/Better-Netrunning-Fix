@@ -670,6 +670,136 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
 
 ## Low Priority
 
+### Phase 5: Network Centroid Calculation Option
+- **Status**: 💡 UNDER CONSIDERATION
+- **Priority**: � LOW
+- **Description**: Add option to use network centroid (geometric center) instead of target device position for RadialBreach physical distance filtering
+- **Estimated Timeline**: 2-3 days
+- **Effort Estimate**: 4-6 hours
+- **Target Date**: TBD (After Phase 4 testing and user feedback)
+
+#### Overview
+Currently, both AccessPoint breach and RemoteBreach use the **target device position** as the center point for RadialBreach's 50m physical distance filtering. This Phase 5 feature would add an **optional mode** to calculate the geometric centroid of all network devices and use that as the filtering center instead.
+
+#### Implementation Details
+
+**Current Behavior (Target-Centered)**:
+```
+Scenario: 5 cameras in a line (0m, 30m, 60m, 90m, 120m)
+Player hacks Camera A (0m) with 50m range
+Result: Unlocks Camera A, B only (2/5 devices)
+```
+
+**Phase 5 Behavior (Network-Centered)**:
+```
+Scenario: Same 5 cameras
+Player hacks Camera A (0m) with 50m range
+Centroid calculation: (0+30+60+90+120)/5 = 60m
+Result: Unlocks Camera B, C, D (3/5 devices)
+```
+
+**Key Differences**:
+- **Target-Centered**: Strategic (player choice matters), predictable, current implementation
+- **Network-Centered**: Fair coverage, less strategic, better for large networks
+
+#### Technical Approach
+
+**1. Add Configuration Setting**
+```redscript
+public class BetterNetrunningSettings {
+  @runtimeProperty("ModSettings.mod", "Better Netrunning")
+  @runtimeProperty("ModSettings.category", "RadialBreach")
+  @runtimeProperty("ModSettings.displayName", "Use Network Centroid")
+  @runtimeProperty("ModSettings.description", "Use geometric center of network instead of target device")
+  let useNetworkCentroid: Bool = false;  // Default: target-centered
+}
+```
+
+**2. Implement Centroid Calculator**
+```redscript
+@addMethod(AccessPointControllerPS)
+private func CalculateNetworkCentroid(devices: array<ref<DeviceComponentPS>>) -> Vector4 {
+  let sumX: Float = 0.0;
+  let sumY: Float = 0.0;
+  let sumZ: Float = 0.0;
+  let count: Int32 = 0;
+
+  // Average all device positions
+  for device in devices {
+    let entity: wref<GameObject> = device.GetOwnerEntityWeak();
+    if IsDefined(entity) {
+      let pos: Vector4 = entity.GetWorldPosition();
+      sumX += pos.X;
+      sumY += pos.Y;
+      sumZ += pos.Z;
+      count += 1;
+    }
+  }
+
+  return Vector4(sumX/count, sumY/count, sumZ/count, 1.0);
+}
+```
+
+**3. Modify RadialBreachGating.reds**
+- Update `ApplyBreachUnlockToDevices()` to conditionally use centroid
+- Update `ApplyRemoteBreachNetworkUnlock()` to conditionally use centroid
+- Maintain backward compatibility (target-centered by default)
+
+#### Implementation Tasks
+- [ ] Research: Test centroid calculation performance with large networks (100+ devices)
+- [ ] Implement: Add `useNetworkCentroid` setting to BetterNetrunningSettings
+- [ ] Implement: Add `CalculateNetworkCentroid()` helper method
+- [ ] Modify: Update `GetBreachPosition()` to support centroid mode
+- [ ] Modify: Update AccessPoint breach logic (RadialBreachGating.reds)
+- [ ] Modify: Update RemoteBreach logic (RadialBreachGating.reds)
+- [ ] Test: Compare target-centered vs centroid-centered in various scenarios
+- [ ] Test: Performance impact with large networks
+- [ ] Document: Update PHASE5_SUMMARY.md with implementation details
+- [ ] Document: Add user guide explaining the difference
+
+#### Use Cases
+
+**When Target-Centered is Better**:
+- ✅ Strategic gameplay (reward good target selection)
+- ✅ Predictable behavior (intuitive for players)
+- ✅ Small to medium networks (< 10 devices)
+
+**When Network-Centered is Better**:
+- ✅ Large networks (> 20 devices)
+- ✅ Evenly distributed devices (buildings, floors)
+- ✅ Players who want "fair" coverage regardless of target choice
+
+#### Considerations
+
+**Pros**:
+- ✅ More flexible playstyle options
+- ✅ Better coverage for large, distributed networks
+- ✅ Mathematically "fair" device filtering
+- ✅ Optional (doesn't affect existing behavior)
+
+**Cons**:
+- ⚠️ Reduced strategic importance of target selection
+- ⚠️ Less intuitive/predictable for players
+- ⚠️ Additional computation cost (centroid calculation)
+- ⚠️ May confuse players (invisible center point)
+
+#### Dependencies
+- ✅ Phase 4 complete (RadialBreach integration)
+- ⏳ User testing feedback (determine if feature is needed)
+- ⏳ Performance analysis (acceptable overhead for centroid calculation)
+
+#### Success Criteria
+- [ ] No performance degradation (< 1ms additional processing time)
+- [ ] Clear documentation explaining the difference
+- [ ] Setting works correctly in both AccessPoint and RemoteBreach
+- [ ] Centroid calculation handles edge cases (invalid positions, empty networks)
+- [ ] User feedback indicates feature is valuable
+
+#### Related Documents
+- `PHASE4_SUMMARY.md` - Current RadialBreach implementation
+- `RADIALBREACH_INTEGRATION_ANALYSIS.md` - Technical analysis of integration
+- Analysis: Target-centered vs Network-centered comparison (documented in chat 2025-10-08)
+
 ### CustomHackingSystem - Dynamic Program Filtering API
 - **Status**: 💤 Proposed (Pending upstream collaboration)
 - **Priority**: 🟢 LOW
@@ -707,12 +837,17 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
 ### 🟡 Medium Priority (0 tasks)
 *No medium priority tasks at this time*
 
-### 🟢 Low Priority (2 tasks)
-1. **CustomHackingSystem - Dynamic Program Filtering API**
+### 🟢 Low Priority (3 tasks)
+1. **Phase 5: Network Centroid Calculation Option**
+   - Status: 💡 UNDER CONSIDERATION
+   - Next Action: Gather user feedback from Phase 4 testing
+   - Effort: 4-6 hours
+
+2. **CustomHackingSystem - Dynamic Program Filtering API**
    - Status: 💤 Proposed
    - Next Action: Create GitHub Issue on CustomHackingSystem repository
 
-2. **Daemon Netrunning Integration**
+3. **Daemon Netrunning Integration**
    - Status: 💤 Deferred
    - Next Action: Re-evaluate after user demand assessment
 
@@ -720,7 +855,7 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
 **Immediate Actions Required**: 2
   - MOD Compatibility Phase 2: API Research (OnIncapacitated, OnAccessPointMiniGameStatus)
   - RadialBreach Integration: User testing execution
-**Blocked Tasks**: 2 (Waiting for external responses/dependencies)
+**Blocked Tasks**: 3 (Waiting for external responses/dependencies/feedback)
   - CustomHackingSystem - Dynamic Program Filtering API (Low Priority)
   - Daemon Netrunning Integration (Low Priority)
 
@@ -744,4 +879,4 @@ public func GetLastBreachPositionByID(apID: PersistentID, gameInstance: GameInst
 
 ---
 
-Last updated: 2025-10-07
+Last updated: 2025-10-08

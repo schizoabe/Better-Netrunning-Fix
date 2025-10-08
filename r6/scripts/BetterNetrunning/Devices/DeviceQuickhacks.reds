@@ -3,6 +3,7 @@ module BetterNetrunning.Devices
 import BetterNetrunningConfig.*
 import BetterNetrunning.Common.*
 import BetterNetrunning.Progression.*
+import BetterNetrunning.RadialUnlock.*
 
 /*
  * ============================================================================

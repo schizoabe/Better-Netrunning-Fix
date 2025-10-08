@@ -68,10 +68,12 @@ Despite architectural differences, both systems share common utilities via **mod
 - `VehicleUnlockStrategy` - Vehicle unlock logic
 - Encapsulates device-specific unlock behavior
 
-### RadialUnlockSystem (State Management)
-- Tracks devices unlocked via RadialBreach minigame
+### RadialUnlockSystem (BetterNetrunning.RadialUnlock)
+- Position-based breach tracking (50m radius)
 - Prevents duplicate RemoteBreach actions on unlocked devices
-- Integration with CustomHackingSystem
+- Standalone device unlock within breach radius
+- RadialBreach MOD integration
+- RemoteBreach Phase 1 network unlock support
 
 ---
 
@@ -171,14 +173,12 @@ r6/scripts/BetterNetrunning/
 │   ├── BreachProcessing.reds       ← RefreshSlaves, breach completion (246 lines)
 │   └── BreachHelpers.reds          ← Network hierarchy, minigame status (108 lines)
 │
-├── Common/                         ← Shared utilities (7 modules)
+├── Common/                         ← Shared utilities (5 modules)
 │   ├── DaemonUtils.reds            ← Daemon type identification
 │   ├── DeviceTypeUtils.reds        ← Device type detection
 │   ├── DNRGating.reds              ← Daemon Netrunning Revamp integration
 │   ├── Events.reds                 ← Persistent field definitions, breach events
-│   ├── Logger.reds                 ← Centralized logging (BNLog)
-│   ├── RadialBreachGating.reds     ← 50m radius breach tracking
-│   └── RadialUnlockSystem.reds     ← Standalone device unlock tracking
+│   └── Logger.reds                 ← Centralized logging (BNLog)
 │
 ├── CustomHacking/                  ← CustomHackingSystem integration (9 files)
 │   ├── DaemonImplementation.reds   ← Daemon execution logic
@@ -190,6 +190,11 @@ r6/scripts/BetterNetrunning/
 │   ├── RemoteBreachProgram.reds    ← Daemon programs (Basic/NPC/Camera/Turret)
 │   ├── RemoteBreachSystem.reds     ← RemoteBreach minigame system
 │   └── RemoteBreachVisibility.reds ← Visibility management
+│
+├── RadialUnlock/                   ← Radial unlock system (3 modules, 788 lines)
+│   ├── RadialUnlockSystem.reds     ← Position-based breach tracking (50m radius, 338 lines)
+│   ├── RadialBreachGating.reds     ← RadialBreach MOD integration (182 lines)
+│   └── RemoteBreachNetworkUnlock.reds ← RemoteBreach network unlock Phase 1 (268 lines)
 │
 ├── Devices/                        ← Device quickhack logic (684 lines)
 │   ├── DeviceQuickhacks.reds       ← Progressive unlock, action finalization (468 lines)
@@ -218,16 +223,20 @@ r6/scripts/BetterNetrunning/
 - Total codebase: 1619 lines → 2178 lines (+34.5%, documentation included)
 
 **Phase 5: Documentation & Finalization**
-- All `/* */` block comments → `//` line comments (REDscript compliance)
 - ARCHITECTURE.md created (520 lines)
 - Module architecture documentation added
 - Design philosophy documented
 
-**Code Quality Metrics:**
-- Maximum function size: 95 lines → 30 lines (**-68.4%**)
-- Nesting depth: 6 levels → 2 levels (**-60%**)
-- Cyclomatic complexity: Reduced by **60%**
-- Module count: 1 file → 11 files (+10 modules)
+**Phase 6: RadialUnlock Module Consolidation (2025-10-08)**
+- RadialUnlock/ directory created (dedicated module)
+- 3 files consolidated: 788 lines total
+  - RadialUnlockSystem.reds (338 lines) - Common/ → RadialUnlock/
+  - RadialBreachGating.reds (182 lines) - Common/ → RadialUnlock/
+  - RemoteBreachNetworkUnlock.reds (268 lines) - CustomHacking/ → RadialUnlock/
+- Module namespace: `BetterNetrunning.RadialUnlock`
+- Functional cohesion: Radial unlock features in one location
+- Dependency clarity: RadialUnlock as terminal module
+- Maintainability: Isolated changes to radial unlock system
 
 **Design Patterns Applied:**
 - ✅ Single Responsibility Principle (each module = 1 concern)
@@ -252,6 +261,7 @@ r6/scripts/BetterNetrunning/
 ✅ Unlock behavior → `DaemonUnlockStrategy` (Strategy Pattern)
 ✅ AccessPointBreach filtering → `betterNetrunning.reds` (dynamic)
 ✅ RemoteBreach selection → `RemoteBreachAction_*.reds` (static)
+✅ Radial unlock system → `RadialUnlock/*` (dedicated module)
 
 ### 2. Single Source of Truth
 ✅ Device type checks: `DeviceTypeUtils.IsCamera()`
@@ -291,11 +301,13 @@ r6/scripts/BetterNetrunning/
 | **betterNetrunning.reds** | 1619 lines | 209 lines | **-87.1%** |
 | **Total Codebase** | 1619 lines | 2178 lines | +34.5% (with docs) |
 | **Module Count** | 1 file | 11 files | +10 modules |
+| **Directory Structure** | Flat | 8 directories | Hierarchical |
 | **Max Function Size** | 95 lines | 30 lines | **-68.4%** |
 | **Nesting Depth** | 6 levels | 2 levels | **-60%** |
 | **Cyclomatic Complexity** | High | Reduced | **-60%** |
 | **Code Duplication** | Extensive | Eliminated | 509 lines removed |
 | **Maintainability Index** | Low | High | Significantly improved |
+| **Functional Cohesion** | Mixed concerns | Single responsibility | High cohesion |
 
 **Documentation:**
 - ✅ ARCHITECTURE.md: 520 lines (comprehensive guide)

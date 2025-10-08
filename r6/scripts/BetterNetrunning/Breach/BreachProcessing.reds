@@ -2,6 +2,7 @@ module BetterNetrunning.Breach
 
 import BetterNetrunningConfig.*
 import BetterNetrunning.Common.*
+import BetterNetrunning.RadialUnlock.*
 
 /*
  * Breach processing module for Access Point minigame completion
