@@ -4,10 +4,6 @@ import BetterNetrunning.Common.*
 import BetterNetrunning.CustomHacking.*
 import BetterNetrunningConfig.*
 
-// Import RadialBreach settings when available
-@if(ModuleExists("RadialBreach"))
-import RadialBreach.Config.*
-
 /*
  * Controls which breach programs (daemons) appear in the minigame
  *
@@ -1032,19 +1028,10 @@ public final const func GetValidChoices(const actions: script_ref<array<wref<Obj
 	wrappedMethod(actions, context, objectActionsCallbackController, checkPlayerQuickHackList, choices);
 }
 
-// Persistent fields for tracking breach state per device type
-@addField(ScriptedPuppetPS)
-public persistent let m_betterNetrunningWasDirectlyBreached: Bool;
+// ==================== Persistent Field Definitions ====================
 
-// Device breach state fields
-@addField(SharedGameplayPS)
-public persistent let m_betterNetrunningBreachedBasic: Bool;
-@addField(SharedGameplayPS)
-public persistent let m_betterNetrunningBreachedNPCs: Bool;
-@addField(SharedGameplayPS)
-public persistent let m_betterNetrunningBreachedCameras: Bool;
-@addField(SharedGameplayPS)
-public persistent let m_betterNetrunningBreachedTurrets: Bool;
+// NOTE: Persistent fields (m_betterNetrunningWasDirectlyBreached, m_betterNetrunningBreached*)
+// have been moved to Common/Events.reds for better code organization.
 
 /*
  * Processes breach minigame results and unlocks quickhacks network-wide
@@ -1257,79 +1244,9 @@ private final func ProcessUnlockProgram(programID: TweakDBID, flags: script_ref<
   }
 }
 
-// Helper: Applies device-type-specific unlock to all connected devices (WITH RadialBreach)
-@if(ModuleExists("RadialBreach"))
-@addMethod(AccessPointControllerPS)
-private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
-  let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-  setBreachedSubnetEvent.breachedBasic = unlockFlags.unlockBasic;
-  setBreachedSubnetEvent.breachedNPCs = unlockFlags.unlockNPCs;
-  setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
-  setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
-
-  // RadialBreach Integration - Physical Distance Filtering
-  let breachPosition: Vector4 = this.GetBreachPosition();
-  let maxDistance: Float = this.GetRadialBreachRange();
-  let shouldUseRadialFiltering: Bool = breachPosition.X >= -999000.0;
-
-  let i: Int32 = 0;
-  while i < ArraySize(Deref(devices)) {
-    let device: ref<DeviceComponentPS> = Deref(devices)[i];
-
-    // Physical distance check (RadialBreach integration)
-    let shouldUnlock: Bool = !shouldUseRadialFiltering || this.IsDeviceWithinBreachRadius(device, breachPosition, maxDistance);
-
-    if shouldUnlock {
-      // Classic mode: unlock all quickhacks on all devices
-      if BetterNetrunningSettings.EnableClassicMode() {
-        this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-      }
-      // Progressive mode: unlock by device type
-      else {
-        this.ApplyDeviceTypeUnlock(device, unlockFlags);
-      }
-
-      this.ProcessMinigameNetworkActions(device);
-      this.QueuePSEvent(device, setBreachedSubnetEvent);
-    }
-
-    i += 1;
-  }
-}
-
-// Helper: Applies device-type-specific unlock to all connected devices (WITHOUT RadialBreach)
-@if(!ModuleExists("RadialBreach"))
-@addMethod(AccessPointControllerPS)
-private final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
-  let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-  setBreachedSubnetEvent.breachedBasic = unlockFlags.unlockBasic;
-  setBreachedSubnetEvent.breachedNPCs = unlockFlags.unlockNPCs;
-  setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
-  setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
-
-  // No RadialBreach filtering - unlock all devices in network
-  let i: Int32 = 0;
-  while i < ArraySize(Deref(devices)) {
-    let device: ref<DeviceComponentPS> = Deref(devices)[i];
-
-    // Classic mode: unlock all quickhacks on all devices
-    if BetterNetrunningSettings.EnableClassicMode() {
-      this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
-    }
-    // Progressive mode: unlock by device type
-    else {
-      this.ApplyDeviceTypeUnlock(device, unlockFlags);
-    }
-
-    this.ProcessMinigameNetworkActions(device);
-    this.QueuePSEvent(device, setBreachedSubnetEvent);
-    i += 1;
-  }
-}
-
 // Helper: Unlocks quickhacks based on device type (using DeviceTypeUtils)
 @addMethod(AccessPointControllerPS)
-private final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
+public final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
   let sharedPS: ref<SharedGameplayPS> = device as SharedGameplayPS;
   if !IsDefined(sharedPS) {
     return;
@@ -1347,75 +1264,6 @@ private final func ApplyDeviceTypeUnlock(device: ref<DeviceComponentPS>, unlockF
   this.QueuePSEvent(device, this.ActionSetExposeQuickHacks());
   DeviceTypeUtils.SetBreached(deviceType, sharedPS, true);
 }
-
-// ============================================================================
-// RADIALBREACH INTEGRATION HELPERS
-// ============================================================================
-
-// Gets the breach range from RadialBreach settings (or default 50m)
-// Automatically syncs with RadialBreach user configuration
-@if(ModuleExists("RadialBreach"))
-@addMethod(AccessPointControllerPS)
-private final func GetRadialBreachRange() -> Float {
-  // Reference RadialBreach's breachRange setting directly
-  // This automatically syncs with user's Native Settings UI configuration
-  let settings: ref<RadialBreachSettings> = new RadialBreachSettings();
-  return settings.breachRange;
-}
-
-// Fallback when RadialBreach is not installed - use default 50m
-@if(!ModuleExists("RadialBreach"))
-@addMethod(AccessPointControllerPS)
-private final func GetRadialBreachRange() -> Float {
-  return 50.0; // Default range when RadialBreach not installed
-}
-
-// Gets the breach position (AccessPoint position or player position as fallback)
-@addMethod(AccessPointControllerPS)
-private final func GetBreachPosition() -> Vector4 {
-  // Try to get AccessPoint entity position
-  let apEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
-  if IsDefined(apEntity) {
-    let position: Vector4 = apEntity.GetWorldPosition();
-      return position;
-  }
-
-  // Fallback: player position
-  let player: ref<PlayerPuppet> = GetPlayer(this.GetGameInstance());
-  if IsDefined(player) {
-    let position: Vector4 = player.GetWorldPosition();
-      return position;
-  }
-
-  // ✁EFIXED: Error signal instead of zero vector to prevent filtering all devices
-  // Zero vector would cause all devices to be filtered out (distance > 50m from world origin)
-  BNLog("[GetBreachPosition] ERROR: Could not get breach position, returning error signal");
-  return Vector4(-999999.0, -999999.0, -999999.0, 1.0);
-}
-
-// Checks if a device is within breach radius
-@addMethod(AccessPointControllerPS)
-private final func IsDeviceWithinBreachRadius(device: ref<DeviceComponentPS>, breachPosition: Vector4, maxDistance: Float) -> Bool {
-  let deviceEntity: wref<GameObject> = device.GetOwnerEntityWeak() as GameObject;
-  if !IsDefined(deviceEntity) {
-      return true; // Fallback: allow unlock if entity not found
-  }
-
-  let devicePosition: Vector4 = deviceEntity.GetWorldPosition();
-  let distance: Float = Vector4.Distance(breachPosition, devicePosition);
-
-  let withinRadius: Bool = distance <= maxDistance;
-
-  if withinRadius {
-    } else {
-    }
-
-  return withinRadius;
-}
-
-// ============================================================================
-// END RADIALBREACH INTEGRATION
-// ============================================================================
 
 /*
  * Injects progressive unlock programs into breach minigame
@@ -1767,60 +1615,5 @@ public func ShouldUnlockHackDevice(gameInstance: GameInstance, alwaysAllow: Bool
 
 // ==================== Breach State Event System ====================
 
-/*
- * Custom event for propagating breach state across network devices
- * Sent to all devices when subnet is successfully breached
- */
-public class SetBreachedSubnet extends ActionBool {
-
-  public let breachedBasic: Bool;
-  public let breachedNPCs: Bool;
-  public let breachedCameras: Bool;
-  public let breachedTurrets: Bool;
-
-  public final func SetProperties() -> Void {
-    this.actionName = n"SetBreachedSubnet";
-    this.prop = DeviceActionPropertyFunctions.SetUpProperty_Bool(this.actionName, true, n"SetBreachedSubnet", n"SetBreachedSubnet");
-  }
-
-  public func GetTweakDBChoiceRecord() -> String {
-    return "SetBreachedSubnet";
-  }
-
-  public final static func IsAvailable(device: ref<ScriptableDeviceComponentPS>) -> Bool {
-    return true;
-  }
-
-  public final static func IsClearanceValid(clearance: ref<Clearance>) -> Bool {
-    if Clearance.IsInRange(clearance, 2) {
-      return true;
-    };
-    return false;
-  }
-
-  public final static func IsContextValid(const context: script_ref<GetActionsContext>) -> Bool {
-    if Equals(Deref(context).requestType, gamedeviceRequestType.Direct) {
-      return true;
-    };
-    return false;
-  }
-
-}
-
-// Event handler: Updates device breach state when subnet is breached
-@addMethod(SharedGameplayPS)
-public func OnSetBreachedSubnet(evt: ref<SetBreachedSubnet>) -> EntityNotificationType {
-  if evt.breachedBasic {
-    this.m_betterNetrunningBreachedBasic = true;
-  }
-  if evt.breachedNPCs {
-    this.m_betterNetrunningBreachedNPCs = true;
-  }
-  if evt.breachedCameras {
-    this.m_betterNetrunningBreachedCameras = true;
-  }
-  if evt.breachedTurrets {
-    this.m_betterNetrunningBreachedTurrets = true;
-  }
-  return EntityNotificationType.SendThisEventToEntity;
-}
+// NOTE: SetBreachedSubnet event and its handler have been moved to Common/Events.reds
+// for better code organization and cross-module accessibility.
