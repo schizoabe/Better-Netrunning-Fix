@@ -97,15 +97,18 @@ protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, const 
     wrappedMethod(actions, context);
     RemoteBreachActionHelper.RemoveTweakDBRemoteBreach(actions, n"RemoteBreachAction");
 
-    if !BetterNetrunningSettings.UnlockIfNoAccessPoint() {
-        // Check if this computer is already breached via RemoteBreach StateSystem
-        let stateSystem: ref<RemoteBreachStateSystem> = StateSystemUtils.GetComputerStateSystem(this.GetGameInstance());
-
-        if IsDefined(stateSystem) && stateSystem.IsComputerBreached(this.GetID()) {
-            return;
-        }
-
-        let breachAction: ref<RemoteBreachAction> = this.ActionCustomRemoteBreach();
-        ArrayPush(actions, breachAction);
+    // Check if Computer RemoteBreach is enabled AND UnlockIfNoAccessPoint is disabled
+    if !BetterNetrunningSettings.RemoteBreachEnabledComputer() || BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+        return;
     }
+
+    // Check if this computer is already breached via RemoteBreach StateSystem
+    let stateSystem: ref<RemoteBreachStateSystem> = StateSystemUtils.GetComputerStateSystem(this.GetGameInstance());
+
+    if IsDefined(stateSystem) && stateSystem.IsComputerBreached(this.GetID()) {
+        return;
+    }
+
+    let breachAction: ref<RemoteBreachAction> = this.ActionCustomRemoteBreach();
+    ArrayPush(actions, breachAction);
 }

@@ -43,8 +43,8 @@ import BetterNetrunning.Progression.*
  * - Network isolation detection -> auto-unlock for isolated NPCs
  * - Category-based restrictions (Covert, Combat, Control, Ultimate, Ping, Whistle)
  *
- * REFACTORED: Reduced from 58 lines with 3-level nesting to 45 lines with 2-level nesting
- * Using Extract Method pattern for permission calculation
+ * REFACTORED (Phase 2): Reduced from 3-level nesting to 2-level nesting
+ * Using Continue Pattern + Extract Method for cleaner flow
  */
 @replaceMethod(ScriptedPuppetPS)
 public final const func GetAllChoices(const actions: script_ref<array<wref<ObjectAction_Record>>>, const context: script_ref<GetActionsContext>, puppetActions: script_ref<array<ref<PuppetAction>>>) -> Void {
@@ -59,21 +59,40 @@ public final const func GetAllChoices(const actions: script_ref<array<wref<Objec
   // Step 3: Process all actions
   let i: Int32 = 0;
   while i < ArraySize(Deref(actions)) {
+    // Early skip: Not a remote quickhack
     if this.IsRemoteQuickHackAction(Deref(actions)[i], context) {
-      let puppetAction: ref<PuppetAction> = this.CreatePuppetAction(Deref(actions)[i], instigator);
-
-      if puppetAction.IsQuickHack() {
-        // Apply progressive unlock restrictions
-        if this.ShouldQuickhackBeInactive(puppetAction, permissions) {
-          this.SetQuickhackInactiveReason(puppetAction, attiudeTowardsPlayer);
-        } else if !isPuppetActive || this.Sts_Ep1_12_ActiveForQHack_Hack() {
-          puppetAction.SetInactiveWithReason(false, "LocKey#7018");
-        }
-        ArrayPush(Deref(puppetActions), puppetAction);
-      }
+      // Process quickhack action
+      this.ProcessQuickhackAction(Deref(actions)[i], instigator, permissions, isPuppetActive, attiudeTowardsPlayer, puppetActions);
     }
     i += 1;
   }
+}
+
+// Helper: Process a single quickhack action (reduced nesting)
+@addMethod(ScriptedPuppetPS)
+private final func ProcessQuickhackAction(
+  action: wref<ObjectAction_Record>,
+  instigator: wref<GameObject>,
+  permissions: NPCHackPermissions,
+  isPuppetActive: Bool,
+  attiudeTowardsPlayer: EAIAttitude,
+  puppetActions: script_ref<array<ref<PuppetAction>>>
+) -> Void {
+  let puppetAction: ref<PuppetAction> = this.CreatePuppetAction(action, instigator);
+
+  // Early skip: Not a quickhack
+  if !puppetAction.IsQuickHack() {
+    return;
+  }
+
+  // Apply progressive unlock restrictions
+  if this.ShouldQuickhackBeInactive(puppetAction, permissions) {
+    this.SetQuickhackInactiveReason(puppetAction, attiudeTowardsPlayer);
+  } else if !isPuppetActive || this.Sts_Ep1_12_ActiveForQHack_Hack() {
+    puppetAction.SetInactiveWithReason(false, "LocKey#7018");
+  }
+
+  ArrayPush(Deref(puppetActions), puppetAction);
 }
 
 // ==================== Permission Calculation ====================

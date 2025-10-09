@@ -75,6 +75,9 @@ private final func GetActiveMinigamePrograms() -> array<TweakDBID> {
   this.CheckMasterRunnerAchievement(ArraySize(minigamePrograms));
   this.FilterRedundantPrograms(minigamePrograms);
 
+  // Apply bonus daemons (Phase 5) - using shared utility
+  ApplyBonusDaemons(minigamePrograms, this.GetGameInstance(), "[AccessPoint]");
+
   return minigamePrograms;
 }
 

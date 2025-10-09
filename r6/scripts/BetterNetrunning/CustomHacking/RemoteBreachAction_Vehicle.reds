@@ -89,20 +89,23 @@ protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, const 
     wrappedMethod(actions, context);
     RemoteBreachActionHelper.RemoveTweakDBRemoteBreach(actions, n"VehicleRemoteBreachAction");
 
-    if !BetterNetrunningSettings.UnlockIfNoAccessPoint() {
-        let vehicleEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
-        if !IsDefined(vehicleEntity) {
-            return;
-        }
-
-        let vehicleID: EntityID = vehicleEntity.GetEntityID();
-        let stateSystem: ref<VehicleRemoteBreachStateSystem> = StateSystemUtils.GetVehicleStateSystem(this.GetGameInstance());
-
-        if IsDefined(stateSystem) && stateSystem.IsVehicleBreached(vehicleID) {
-            return;
-        }
-
-        let breachAction: ref<VehicleRemoteBreachAction> = this.ActionCustomVehicleRemoteBreach();
-        ArrayPush(actions, breachAction);
+    // Check if Vehicle RemoteBreach is enabled AND UnlockIfNoAccessPoint is disabled
+    if !BetterNetrunningSettings.RemoteBreachEnabledVehicle() || BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+        return;
     }
+
+    let vehicleEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
+    if !IsDefined(vehicleEntity) {
+        return;
+    }
+
+    let vehicleID: EntityID = vehicleEntity.GetEntityID();
+    let stateSystem: ref<VehicleRemoteBreachStateSystem> = StateSystemUtils.GetVehicleStateSystem(this.GetGameInstance());
+
+    if IsDefined(stateSystem) && stateSystem.IsVehicleBreached(vehicleID) {
+        return;
+    }
+
+    let breachAction: ref<VehicleRemoteBreachAction> = this.ActionCustomVehicleRemoteBreach();
+    ArrayPush(actions, breachAction);
 }

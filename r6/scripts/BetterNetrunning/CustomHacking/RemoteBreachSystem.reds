@@ -283,6 +283,36 @@ public abstract class ProgramIDUtils {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Helper Structures for Reduced Nesting
+// -----------------------------------------------------------------------------
+
+// Targeting setup information (reduces parameter passing)
+// Using struct instead of class to avoid ref<> requirement
+@if(ModuleExists("HackingExtensions"))
+public struct TargetingSetup {
+    let isValid: Bool;
+    let player: ref<PlayerPuppet>;
+    let targetingSystem: ref<TargetingSystem>;
+    let query: TargetSearchQuery;
+    let sourcePos: Vector4;
+    let breachRadius: Float;
+}
+
+// Unlock flags bundle (reduces parameter count)
+// Using struct instead of class to avoid ref<> requirement
+@if(ModuleExists("HackingExtensions"))
+public struct UnlockFlags {
+    let unlockBasic: Bool;
+    let unlockNPCs: Bool;
+    let unlockCameras: Bool;
+    let unlockTurrets: Bool;
+}
+
+// -----------------------------------------------------------------------------
+// RemoteBreach Utils - Main Entry Points
+// -----------------------------------------------------------------------------
+
 @if(ModuleExists("HackingExtensions"))
 public abstract class RemoteBreachUtils {
     public static func RecordBreachPosition(devicePS: ref<ScriptableDeviceComponentPS>, gameInstance: GameInstance) -> Void {
@@ -301,50 +331,17 @@ public abstract class RemoteBreachUtils {
             return;
         }
 
-        let devicePos: Vector4 = deviceEntity.GetWorldPosition();
-        let breachRadius: Float = 50.0;
-
-        let player: ref<PlayerPuppet> = GetPlayer(gameInstance);
-        if !IsDefined(player) {
+        let targetingSetup: TargetingSetup = RemoteBreachUtils.SetupNPCTargeting(deviceEntity, gameInstance);
+        if !targetingSetup.isValid {
             return;
         }
-
-        let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
-        if !IsDefined(targetingSystem) {
-            return;
-        }
-
-        let query: TargetSearchQuery;
-        query.searchFilter = TSF_And(TSF_All(TSFMV.Obj_Puppet), TSF_Not(TSFMV.Obj_Player));
-        query.testedSet = TargetingSet.Complete;
-        query.maxDistance = breachRadius * 2.0;
-        query.filterObjectByDistance = true;
-        query.includeSecondaryTargets = false;
-        query.ignoreInstigator = true;
 
         let parts: array<TS_TargetPartInfo>;
-        targetingSystem.GetTargetParts(player, query, parts);
+        targetingSetup.targetingSystem.GetTargetParts(targetingSetup.player, targetingSetup.query, parts);
 
         let idx: Int32 = 0;
         while idx < ArraySize(parts) {
-            let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[idx]).GetEntity() as GameObject;
-
-            if IsDefined(entity) {
-                let puppet: ref<NPCPuppet> = entity as NPCPuppet;
-
-                if IsDefined(puppet) {
-                    let puppetPos: Vector4 = puppet.GetWorldPosition();
-                    let distance: Float = Vector4.Distance(devicePos, puppetPos);
-
-                    if distance <= breachRadius {
-                        let npcPS: ref<ScriptedPuppetPS> = puppet.GetPS();
-                        if IsDefined(npcPS) {
-                            npcPS.m_quickHacksExposed = true;
-                        }
-                    }
-                }
-            }
-
+            RemoteBreachUtils.ProcessAndUnlockNPC(parts[idx], targetingSetup.sourcePos, targetingSetup.breachRadius);
             idx += 1;
         }
     }
@@ -355,65 +352,17 @@ public abstract class RemoteBreachUtils {
             return;
         }
 
-        let devicePos: Vector4 = deviceEntity.GetWorldPosition();
-        let breachRadius: Float = 50.0;
-
-        let player: ref<PlayerPuppet> = GetPlayer(gameInstance);
-        if !IsDefined(player) {
+        let targetingSetup: TargetingSetup = RemoteBreachUtils.SetupDeviceTargeting(deviceEntity, gameInstance);
+        if !targetingSetup.isValid {
             return;
         }
-
-        let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
-        if !IsDefined(targetingSystem) {
-            return;
-        }
-
-        let query: TargetSearchQuery;
-        query.searchFilter = TSF_All(TSFMV.Obj_Device);
-        query.testedSet = TargetingSet.Complete;
-        query.maxDistance = breachRadius * 2.0;
-        query.filterObjectByDistance = true;
-        query.includeSecondaryTargets = false;
-        query.ignoreInstigator = true;
 
         let parts: array<TS_TargetPartInfo>;
-        targetingSystem.GetTargetParts(player, query, parts);
+        targetingSetup.targetingSystem.GetTargetParts(targetingSetup.player, targetingSetup.query, parts);
 
         let idx: Int32 = 0;
         while idx < ArraySize(parts) {
-            let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[idx]).GetEntity() as GameObject;
-
-            if IsDefined(entity) {
-                let device: ref<Device> = entity as Device;
-
-                if IsDefined(device) {
-                    let deviceComp: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
-
-                    if IsDefined(deviceComp) {
-                        let entityPos: Vector4 = entity.GetWorldPosition();
-                        let distance: Float = Vector4.Distance(devicePos, entityPos);
-
-                        if distance <= breachRadius {
-                            let sharedPS: ref<SharedGameplayPS> = deviceComp;
-                            if IsDefined(sharedPS) {
-                                let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-                                let isNetworkConnected: Bool = ArraySize(apControllers) > 0;
-
-                                if !isNetworkConnected {
-                                    if DaemonFilterUtils.IsCamera(deviceComp) {
-                                        sharedPS.m_betterNetrunningBreachedCameras = true;
-                                    } else if DaemonFilterUtils.IsTurret(deviceComp) {
-                                        sharedPS.m_betterNetrunningBreachedTurrets = true;
-                                    } else {
-                                        sharedPS.m_betterNetrunningBreachedBasic = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
+            RemoteBreachUtils.ProcessAndUnlockStandaloneDevice(parts[idx], targetingSetup.sourcePos, targetingSetup.breachRadius);
             idx += 1;
         }
     }
@@ -424,83 +373,226 @@ public abstract class RemoteBreachUtils {
             return;
         }
 
-        let sourcePos: Vector4 = sourceEntity.GetWorldPosition();
-        let searchRadius: Float = 50.0;
-
-        let player: ref<PlayerPuppet> = GetPlayer(gameInstance);
-        if !IsDefined(player) {
+        let targetingSetup: TargetingSetup = RemoteBreachUtils.SetupDeviceTargeting(sourceEntity, gameInstance);
+        if !targetingSetup.isValid {
             return;
         }
-
-        let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
-        if !IsDefined(targetingSystem) {
-            return;
-        }
-
-        let query: TargetSearchQuery;
-        query.searchFilter = TSF_All(TSFMV.Obj_Device);
-        query.testedSet = TargetingSet.Complete;
-        query.maxDistance = searchRadius * 2.0;
-        query.filterObjectByDistance = true;
-        query.includeSecondaryTargets = false;
-        query.ignoreInstigator = true;
 
         let parts: array<TS_TargetPartInfo>;
-        targetingSystem.GetTargetParts(player, query, parts);
+        targetingSetup.targetingSystem.GetTargetParts(targetingSetup.player, targetingSetup.query, parts);
+
+        let unlockFlags: UnlockFlags;
+        unlockFlags.unlockBasic = unlockBasic;
+        unlockFlags.unlockNPCs = unlockNPCs;
+        unlockFlags.unlockCameras = unlockCameras;
+        unlockFlags.unlockTurrets = unlockTurrets;
 
         let i: Int32 = 0;
-        let networkDeviceCount: Int32 = 0;
         while i < ArraySize(parts) {
-            let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
-            if IsDefined(entity) {
-                let device: ref<Device> = entity as Device;
-                if IsDefined(device) {
-                    let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
-                    if IsDefined(devicePS) {
-                        let deviceSharedPS: ref<SharedGameplayPS> = devicePS as SharedGameplayPS;
-                        if IsDefined(deviceSharedPS) {
-                            // Check if device is network-connected (has access points)
-                            let apControllers: array<ref<AccessPointControllerPS>> = deviceSharedPS.GetAccessPoints();
-                            if ArraySize(apControllers) > 0 {
-                                // This is a network-connected device
-                                let devicePos: Vector4 = entity.GetWorldPosition();
-                                let distance: Float = Vector4.Distance(sourcePos, devicePos);
-
-                                if distance <= searchRadius {
-                                    networkDeviceCount += 1;
-                                    let deviceName: String = ToString(entity.GetClassName());
-
-                                    // Unlock based on device type and daemon flags
-                                    if IsDefined(devicePS as PuppetDeviceLinkPS) || IsDefined(devicePS as CommunityProxyPS) {
-                                        if unlockNPCs {
-                                            deviceSharedPS.m_betterNetrunningBreachedNPCs = true;
-                                        }
-                                    } else if DaemonFilterUtils.IsCamera(devicePS) {
-                                        if unlockCameras {
-                                            deviceSharedPS.m_betterNetrunningBreachedCameras = true;
-                                        }
-                                    } else if DaemonFilterUtils.IsTurret(devicePS) {
-                                        if unlockTurrets {
-                                            deviceSharedPS.m_betterNetrunningBreachedTurrets = true;
-                                        }
-                                    } else {
-                                        if unlockBasic {
-                                            deviceSharedPS.m_betterNetrunningBreachedBasic = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            RemoteBreachUtils.ProcessNetworkDevice(parts[i], targetingSetup, unlockFlags);
             i += 1;
+        }
+    }
+
+    // -----------------------------------------------------------------------------
+    // Private Helper Methods - Targeting Setup
+    // -----------------------------------------------------------------------------
+
+    // Setup targeting for NPC search (reduce code duplication)
+    private static func SetupNPCTargeting(sourceEntity: wref<GameObject>, gameInstance: GameInstance) -> TargetingSetup {
+        let setup: TargetingSetup;
+        setup.isValid = false;
+        setup.breachRadius = 50.0;
+        setup.sourcePos = sourceEntity.GetWorldPosition();
+
+        setup.player = GetPlayer(gameInstance);
+        if !IsDefined(setup.player) {
+            return setup;
+        }
+
+        setup.targetingSystem = GameInstance.GetTargetingSystem(gameInstance);
+        if !IsDefined(setup.targetingSystem) {
+            return setup;
+        }
+
+        setup.query.searchFilter = TSF_And(TSF_All(TSFMV.Obj_Puppet), TSF_Not(TSFMV.Obj_Player));
+        setup.query.testedSet = TargetingSet.Complete;
+        setup.query.maxDistance = setup.breachRadius * 2.0;
+        setup.query.filterObjectByDistance = true;
+        setup.query.includeSecondaryTargets = false;
+        setup.query.ignoreInstigator = true;
+
+        setup.isValid = true;
+        return setup;
+    }
+
+    // Setup targeting for Device search (reduce code duplication)
+    private static func SetupDeviceTargeting(sourceEntity: wref<GameObject>, gameInstance: GameInstance) -> TargetingSetup {
+        let setup: TargetingSetup;
+        setup.isValid = false;
+        setup.breachRadius = 50.0;
+        setup.sourcePos = sourceEntity.GetWorldPosition();
+
+        setup.player = GetPlayer(gameInstance);
+        if !IsDefined(setup.player) {
+            return setup;
+        }
+
+        setup.targetingSystem = GameInstance.GetTargetingSystem(gameInstance);
+        if !IsDefined(setup.targetingSystem) {
+            return setup;
+        }
+
+        setup.query.searchFilter = TSF_All(TSFMV.Obj_Device);
+        setup.query.testedSet = TargetingSet.Complete;
+        setup.query.maxDistance = setup.breachRadius * 2.0;
+        setup.query.filterObjectByDistance = true;
+        setup.query.includeSecondaryTargets = false;
+        setup.query.ignoreInstigator = true;
+
+        setup.isValid = true;
+        return setup;
+    }
+
+    // -----------------------------------------------------------------------------
+    // Private Helper Methods - Entity Processing
+    // -----------------------------------------------------------------------------
+
+    // Process and unlock NPC (reduce nesting in UnlockNPCsInRange)
+    private static func ProcessAndUnlockNPC(part: TS_TargetPartInfo, sourcePos: Vector4, breachRadius: Float) -> Void {
+        let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(part).GetEntity() as GameObject;
+        if !IsDefined(entity) {
+            return;
+        }
+
+        let puppet: ref<NPCPuppet> = entity as NPCPuppet;
+        if !IsDefined(puppet) {
+            return;
+        }
+
+        let distance: Float = Vector4.Distance(sourcePos, puppet.GetWorldPosition());
+        if distance > breachRadius {
+            return;
+        }
+
+        let npcPS: ref<ScriptedPuppetPS> = puppet.GetPS();
+        if IsDefined(npcPS) {
+            npcPS.m_quickHacksExposed = true;
+        }
+    }
+
+    // Process and unlock standalone device (reduce nesting in UnlockDevicesInRadius)
+    private static func ProcessAndUnlockStandaloneDevice(part: TS_TargetPartInfo, sourcePos: Vector4, breachRadius: Float) -> Void {
+        let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(part).GetEntity() as GameObject;
+        if !IsDefined(entity) {
+            return;
+        }
+
+        let device: ref<Device> = entity as Device;
+        if !IsDefined(device) {
+            return;
+        }
+
+        let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
+        if !IsDefined(devicePS) {
+            return;
+        }
+
+        let distance: Float = Vector4.Distance(sourcePos, entity.GetWorldPosition());
+        if distance > breachRadius {
+            return;
+        }
+
+        RemoteBreachUtils.UnlockStandaloneDevice(devicePS);
+    }
+
+    // Unlock standalone device by type (reduce nesting)
+    private static func UnlockStandaloneDevice(devicePS: ref<ScriptableDeviceComponentPS>) -> Void {
+        let sharedPS: ref<SharedGameplayPS> = devicePS;
+        if !IsDefined(sharedPS) {
+            return;
+        }
+
+        let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
+        if ArraySize(apControllers) > 0 {
+            return;  // Network-connected device, skip
+        }
+
+        // Unlock based on device type
+        if DaemonFilterUtils.IsCamera(devicePS) {
+            sharedPS.m_betterNetrunningBreachedCameras = true;
+        } else if DaemonFilterUtils.IsTurret(devicePS) {
+            sharedPS.m_betterNetrunningBreachedTurrets = true;
+        } else {
+            sharedPS.m_betterNetrunningBreachedBasic = true;
+        }
+    }
+
+    // Process network-connected device (reduce nesting in UnlockNearbyNetworkDevices)
+    private static func ProcessNetworkDevice(part: TS_TargetPartInfo, setup: TargetingSetup, flags: UnlockFlags) -> Void {
+        let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(part).GetEntity() as GameObject;
+        if !IsDefined(entity) {
+            return;
+        }
+
+        let device: ref<Device> = entity as Device;
+        if !IsDefined(device) {
+            return;
+        }
+
+        let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
+        if !IsDefined(devicePS) {
+            return;
+        }
+
+        let sharedPS: ref<SharedGameplayPS> = devicePS;
+        if !IsDefined(sharedPS) {
+            return;
+        }
+
+        // Check if network-connected
+        let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
+        if ArraySize(apControllers) == 0 {
+            return;  // Not network-connected
+        }
+
+        // Check distance
+        let distance: Float = Vector4.Distance(setup.sourcePos, entity.GetWorldPosition());
+        if distance > setup.breachRadius {
+            return;
+        }
+
+        // Unlock based on device type
+        RemoteBreachUtils.UnlockDeviceByType(devicePS, sharedPS, entity, flags);
+    }
+
+    // Unlock device by type with flags (reduce nesting)
+    private static func UnlockDeviceByType(devicePS: ref<ScriptableDeviceComponentPS>, sharedPS: ref<SharedGameplayPS>, entity: wref<GameObject>, flags: UnlockFlags) -> Void {
+        let isNPCDevice: Bool = Equals(entity.GetClassName(), n"PuppetDeviceLink") || Equals(entity.GetClassName(), n"CommunityProxy");
+
+        if isNPCDevice {
+            if flags.unlockNPCs {
+                sharedPS.m_betterNetrunningBreachedNPCs = true;
+            }
+        } else if DaemonFilterUtils.IsCamera(devicePS) {
+            if flags.unlockCameras {
+                sharedPS.m_betterNetrunningBreachedCameras = true;
+            }
+        } else if DaemonFilterUtils.IsTurret(devicePS) {
+            if flags.unlockTurrets {
+                sharedPS.m_betterNetrunningBreachedTurrets = true;
+            }
+        } else {
+            if flags.unlockBasic {
+                sharedPS.m_betterNetrunningBreachedBasic = true;
+            }
         }
     }
 }
 
 @if(ModuleExists("HackingExtensions"))
 public abstract class ComputerRemoteBreachUtils {
+    // Refactored: Reduced nesting from 5 levels to 2 levels
     public static func UnlockNetworkDevices(computerPS: ref<ComputerControllerPS>, unlockBasic: Bool, unlockNPCs: Bool, unlockCameras: Bool, unlockTurrets: Bool) -> Void {
         let sharedPS: ref<SharedGameplayPS> = computerPS;
         if !IsDefined(sharedPS) {
@@ -508,60 +600,71 @@ public abstract class ComputerRemoteBreachUtils {
         }
 
         let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-        let isStandaloneComputer: Bool = ArraySize(apControllers) == 0;
-
-        if isStandaloneComputer {
-            return;
+        if ArraySize(apControllers) == 0 {
+            return;  // Standalone computer, no network devices
         }
 
-        let setBreachedEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-        setBreachedEvent.breachedBasic = unlockBasic;
-        setBreachedEvent.breachedNPCs = unlockNPCs;
-        setBreachedEvent.breachedCameras = unlockCameras;
-        setBreachedEvent.breachedTurrets = unlockTurrets;
+        let flags: UnlockFlags;
+        flags.unlockBasic = unlockBasic;
+        flags.unlockNPCs = unlockNPCs;
+        flags.unlockCameras = unlockCameras;
+        flags.unlockTurrets = unlockTurrets;
 
         let i: Int32 = 0;
         while i < ArraySize(apControllers) {
-            let apPS: ref<AccessPointControllerPS> = apControllers[i];
-            if IsDefined(apPS) {
-                let devices: array<ref<DeviceComponentPS>>;
-                apPS.GetChildren(devices);
+            ComputerRemoteBreachUtils.ProcessAccessPointDevices(apControllers[i], flags);
+            i += 1;
+        }
+    }
 
-                let j: Int32 = 0;
-                while j < ArraySize(devices) {
-                    let device: ref<DeviceComponentPS> = devices[j];
+    // Helper: Process all devices connected to a single AccessPoint
+    private static func ProcessAccessPointDevices(apPS: ref<AccessPointControllerPS>, flags: UnlockFlags) -> Void {
+        if !IsDefined(apPS) {
+            return;
+        }
 
-                    if IsDefined(device) {
-                        apPS.QueuePSEvent(device, setBreachedEvent);
+        let devices: array<ref<DeviceComponentPS>>;
+        apPS.GetChildren(devices);
 
-                        // Use DeviceTypeUtils for centralized device type detection
-                        let deviceType: DeviceType = DeviceTypeUtils.GetDeviceType(device);
-                        let shouldUnlock: Bool = false;
+        let setBreachedEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
+        setBreachedEvent.breachedBasic = flags.unlockBasic;
+        setBreachedEvent.breachedNPCs = flags.unlockNPCs;
+        setBreachedEvent.breachedCameras = flags.unlockCameras;
+        setBreachedEvent.breachedTurrets = flags.unlockTurrets;
 
-                        switch deviceType {
-                            case DeviceType.NPC:
-                                shouldUnlock = unlockNPCs;
-                                break;
-                            case DeviceType.Camera:
-                                shouldUnlock = unlockCameras;
-                                break;
-                            case DeviceType.Turret:
-                                shouldUnlock = unlockTurrets;
-                                break;
-                            case DeviceType.Basic:
-                                shouldUnlock = unlockBasic;
-                                break;
-                        }
+        let j: Int32 = 0;
+        while j < ArraySize(devices) {
+            let device: ref<DeviceComponentPS> = devices[j];
+            if IsDefined(device) {
+                // Queue breach event for this device
+                apPS.QueuePSEvent(device, setBreachedEvent);
 
-                        if shouldUnlock {
-                            apPS.QueuePSEvent(device, apPS.ActionSetExposeQuickHacks());
-                        }
-                    }
+                // Determine device type and check if should unlock
+                let deviceType: DeviceType = DeviceTypeUtils.GetDeviceType(device);
+                let shouldUnlock: Bool = ComputerRemoteBreachUtils.ShouldUnlockDeviceType(deviceType, flags);
 
-                    j += 1;
+                if shouldUnlock {
+                    apPS.QueuePSEvent(device, apPS.ActionSetExposeQuickHacks());
                 }
             }
-            i += 1;
+
+            j += 1;
+        }
+    }
+
+    // Helper: Check if device type should be unlocked based on flags
+    private static func ShouldUnlockDeviceType(deviceType: DeviceType, flags: UnlockFlags) -> Bool {
+        switch deviceType {
+            case DeviceType.NPC:
+                return flags.unlockNPCs;
+            case DeviceType.Camera:
+                return flags.unlockCameras;
+            case DeviceType.Turret:
+                return flags.unlockTurrets;
+            case DeviceType.Basic:
+                return flags.unlockBasic;
+            default:
+                return false;
         }
     }
 }

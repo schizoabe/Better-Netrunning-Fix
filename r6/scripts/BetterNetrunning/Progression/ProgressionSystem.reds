@@ -39,6 +39,8 @@ import BetterNetrunningConfig.*
 /// @return Corresponding gamedataQuality enum value
 public func CyberdeckQualityFromConfigValue(value: Int32) -> gamedataQuality {
   switch(value) {
+    case 1:
+      return gamedataQuality.Common;
     case 2:
       return gamedataQuality.CommonPlus;
     case 3:
@@ -107,13 +109,6 @@ public func CyberdeckConditionMet(gameInstance: GameInstance, value: Int32) -> B
   return CyberdeckQualityToRank(playerCyberdeckQuality) >= CyberdeckQualityToRank(minQuality);
 }
 
-/// Returns true if Cyberdeck requirement is enabled (value > 1 = Common+)
-/// @param value Config value (1=disabled, 2+=enabled)
-/// @return true if Cyberdeck check should be applied
-public func CyberdeckConditionEnabled(value: Int32) -> Bool {
-  return value > 1;
-}
-
 // ============================================================================
 // INTELLIGENCE STAT CHECKS
 // ============================================================================
@@ -126,13 +121,6 @@ public func IntelligenceConditionMet(gameInstance: GameInstance, value: Int32) -
   let statsSystem: ref<StatsSystem> = GameInstance.GetStatsSystem(gameInstance);
   let playerIntelligence: Int32 = Cast(statsSystem.GetStatValue(Cast(GetPlayer(gameInstance).GetEntityID()), gamedataStatType.Intelligence));
   return playerIntelligence >= value;
-}
-
-/// Returns true if Intelligence requirement is enabled (value > 3 = base stat)
-/// @param value Config value (3=disabled, 4+=enabled)
-/// @return true if Intelligence check should be applied
-public func IntelligenceConditionEnabled(value: Int32) -> Bool {
-  return value > 3;
 }
 
 // ============================================================================
@@ -178,13 +166,6 @@ public func EnemyRarityConditionMet(gameInstance: GameInstance, enemy: wref<Enti
   return NPCRarityToRank(rarity) <= value;
 }
 
-/// Returns true if enemy rarity requirement is enabled (value < 8 = not MaxTac)
-/// @param value Config value (8=disabled, 1-7=enabled)
-/// @return true if rarity check should be applied
-public func EnemyRarityConditionEnabled(value: Int32) -> Bool {
-  return value < 8;
-}
-
 // ============================================================================
 // COMBINED PROGRESSION CHECKS
 // ============================================================================
@@ -203,9 +184,9 @@ public func ShouldUnlockHackNPC(gameInstance: GameInstance, enemy: wref<Entity>,
     return true;
   }
 
-  let useConditionCyberdeck: Bool = CyberdeckConditionEnabled(cyberdeckValue);
-  let useConditionIntelligence: Bool = IntelligenceConditionEnabled(intelligenceValue);
-  let useConditionEnemyRarity: Bool = EnemyRarityConditionEnabled(enemyRarityValue);
+  let useConditionCyberdeck: Bool = BetterNetrunningSettings.ProgressionCyberdeckEnabled();
+  let useConditionIntelligence: Bool = BetterNetrunningSettings.ProgressionIntelligenceEnabled();
+  let useConditionEnemyRarity: Bool = BetterNetrunningSettings.ProgressionEnemyRarityEnabled();
 
   if !useConditionCyberdeck && !useConditionIntelligence && !useConditionEnemyRarity {
     return false;
@@ -235,8 +216,8 @@ public func ShouldUnlockHackDevice(gameInstance: GameInstance, alwaysAllow: Bool
     return true;
   }
 
-  let useConditionCyberdeck: Bool = CyberdeckConditionEnabled(cyberdeckValue);
-  let useConditionIntelligence: Bool = IntelligenceConditionEnabled(intelligenceValue);
+  let useConditionCyberdeck: Bool = BetterNetrunningSettings.ProgressionCyberdeckEnabled();
+  let useConditionIntelligence: Bool = BetterNetrunningSettings.ProgressionIntelligenceEnabled();
 
   if !useConditionCyberdeck && !useConditionIntelligence {
     return false;

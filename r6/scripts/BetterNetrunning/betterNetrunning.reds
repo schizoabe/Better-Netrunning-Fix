@@ -88,8 +88,7 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
   // This ensures actionID fields are properly initialized by vanilla logic
   let i: Int32 = ArraySize(Deref(programs)) - 1;
   while i >= 0 {
-    let actionID: TweakDBID = Deref(programs)[i].actionID;
-    if ShouldRemoveBreachedPrograms(actionID, this.m_entity as GameObject) {
+    if ShouldRemoveBreachedPrograms(Deref(programs)[i].actionID, this.m_entity as GameObject) {
       ArrayErase(Deref(programs), i);
     }
     i -= 1;
@@ -109,7 +108,7 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
   } else {
     connectedToNetwork = (this.m_entity as Device).GetDevicePS().IsConnectedToPhysicalAccessPoint();
     data = (this.m_entity as Device).GetDevicePS().CheckMasterConnectedClassTypes();
-    devPS = (this.m_entity as Device).GetDevicePS() as SharedGameplayPS;
+    devPS = (this.m_entity as Device).GetDevicePS();
     BNLog("[FilterPlayerPrograms] Target: Device (connected=" + ToString(connectedToNetwork) + ")");
   }
 
@@ -125,8 +124,7 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
         || ShouldRemoveDeviceBackdoorPrograms(actionID, this.m_entity as GameObject)
         || ShouldRemoveAccessPointPrograms(actionID, miniGameActionRecord, this.m_isRemoteBreach)
         || ShouldRemoveNonNetrunnerPrograms(actionID, miniGameActionRecord, this.m_isRemoteBreach, this.m_entity as GameObject)
-        || ShouldRemoveDeviceTypePrograms(actionID, miniGameActionRecord, data)
-        || ShouldRemoveDataminePrograms(actionID) {
+        || ShouldRemoveDeviceTypePrograms(actionID, miniGameActionRecord, data) {
       ArrayErase(Deref(programs), i);
       removedCount += 1;
     }

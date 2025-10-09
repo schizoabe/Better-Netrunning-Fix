@@ -202,22 +202,6 @@ public func ShouldRemoveDeviceTypePrograms(actionID: TweakDBID, miniGameActionRe
   return false;
 }
 
-// ==================== Datamine Program Filtering ====================
-
-/*
- * Returns true if Datamine V1/V2 programs should be removed (based on user settings)
- *
- * @param actionID - The program's TweakDB ID
- * @return True if the program should be removed
- */
-public func ShouldRemoveDataminePrograms(actionID: TweakDBID) -> Bool {
-  if !BetterNetrunningSettings.DisableDatamineOneTwo() {
-    return false;
-  }
-  return Equals(actionID, t"MinigameAction.NetworkDataMineLootAllAdvanced")
-      || Equals(actionID, t"MinigameAction.NetworkDataMineLootAll");
-}
-
 // ==================== Helper Functions ====================
 
 /*

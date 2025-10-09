@@ -30,6 +30,7 @@
 module BetterNetrunning.CustomHacking
 import BetterNetrunning.Common.*
 import BetterNetrunning.*
+import BetterNetrunningConfig.*
 
 /*
  * Checks if device is already unlocked via daemon or CustomHackingSystem breach
@@ -47,29 +48,26 @@ import BetterNetrunning.*
 public final func IsDeviceAlreadyUnlocked() -> Bool {
   // Check 1: Vehicle-specific unlock (via UnlockQuickhacks daemon)
   if IsDefined(this as VehicleComponentPS) {
-    let isUnlocked: Bool = this.m_betterNetrunningBreachedBasic;
-    if isUnlocked {
+    if this.m_betterNetrunningBreachedBasic {
       BNLog("[IsDeviceAlreadyUnlocked] Vehicle already unlocked");
     }
-    return isUnlocked;
+    return this.m_betterNetrunningBreachedBasic;
   }
 
   // Check 2: Camera-specific unlock (via UnlockCameraQuickhacks daemon)
   if DaemonFilterUtils.IsCamera(this) {
-    let isUnlocked: Bool = this.m_betterNetrunningBreachedCameras;
-    if isUnlocked {
+    if this.m_betterNetrunningBreachedCameras {
       BNLog("[IsDeviceAlreadyUnlocked] Camera already unlocked");
     }
-    return isUnlocked;
+    return this.m_betterNetrunningBreachedCameras;
   }
 
   // Check 3: Turret-specific unlock (via UnlockTurretQuickhacks daemon)
   if DaemonFilterUtils.IsTurret(this) {
-    let isUnlocked: Bool = this.m_betterNetrunningBreachedTurrets;
-    if isUnlocked {
+    if this.m_betterNetrunningBreachedTurrets {
       BNLog("[IsDeviceAlreadyUnlocked] Turret already unlocked");
     }
-    return isUnlocked;
+    return this.m_betterNetrunningBreachedTurrets;
   }
 
   // Check 4a: Basic device unlock (via UnlockQuickhacks daemon)
@@ -86,11 +84,7 @@ public final func IsDeviceAlreadyUnlocked() -> Bool {
         .Get(n"BetterNetrunning.CustomHacking.DeviceRemoteBreachStateSystem") as DeviceRemoteBreachStateSystem;
 
     if IsDefined(stateSystem) {
-      let isBreached: Bool = stateSystem.IsDeviceBreached(deviceEntity.GetEntityID());
-      if isBreached {
-        BNLog("[IsDeviceAlreadyUnlocked] Device already breached (CustomHackingSystem)");
-      }
-      return isBreached;
+      return stateSystem.IsDeviceBreached(deviceEntity.GetEntityID());
     }
   }
 
@@ -129,14 +123,26 @@ public final func TryAddCustomRemoteBreach(outActions: script_ref<array<ref<Devi
     let isVehicle: Bool = IsDefined(this as VehicleComponentPS);
 
     if isComputer {
+      // Check if Computer RemoteBreach is enabled
+      if !BetterNetrunningSettings.RemoteBreachEnabledComputer() {
+        return;
+      }
       let computerPS: ref<ComputerControllerPS> = this as ComputerControllerPS;
       let breachAction: ref<RemoteBreachAction> = computerPS.ActionCustomRemoteBreach();
       ArrayPush(Deref(outActions), breachAction);
     } else if isVehicle {
+      // Check if Vehicle RemoteBreach is enabled
+      if !BetterNetrunningSettings.RemoteBreachEnabledVehicle() {
+        return;
+      }
       let vehiclePS: ref<VehicleComponentPS> = this as VehicleComponentPS;
       let breachAction: ref<VehicleRemoteBreachAction> = vehiclePS.ActionCustomVehicleRemoteBreach();
       ArrayPush(Deref(outActions), breachAction);
     } else {
+      // Check if Device RemoteBreach is enabled
+      if !BetterNetrunningSettings.RemoteBreachEnabledDevice() {
+        return;
+      }
       let breachAction: ref<DeviceRemoteBreachAction> = this.ActionCustomDeviceRemoteBreach();
       ArrayPush(Deref(outActions), breachAction);
     }
@@ -163,6 +169,10 @@ public final func TryAddMissingCustomRemoteBreach(outActions: script_ref<array<r
   let isVehicle: Bool = IsDefined(this as VehicleComponentPS);
 
   if !isComputer && !isVehicle {
+    // Check if Device RemoteBreach is enabled
+    if !BetterNetrunningSettings.RemoteBreachEnabledDevice() {
+      return;
+    }
     let breachAction: ref<DeviceRemoteBreachAction> = this.ActionCustomDeviceRemoteBreach();
     ArrayPush(Deref(outActions), breachAction);
   }

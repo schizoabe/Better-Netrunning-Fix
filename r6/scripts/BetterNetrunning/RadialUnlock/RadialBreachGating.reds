@@ -112,15 +112,10 @@ public final func IsDeviceWithinBreachRadius(device: ref<DeviceComponentPS>, bre
 
 /// Applies device-type-specific unlock to all connected devices
 /// RadialBreach version: Filters devices by physical proximity
+/// Refactored: Reduced nesting from 4 levels to 2 levels
 @if(ModuleExists("RadialBreach"))
 @addMethod(AccessPointControllerPS)
 public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
-  let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-  setBreachedSubnetEvent.breachedBasic = unlockFlags.unlockBasic;
-  setBreachedSubnetEvent.breachedNPCs = unlockFlags.unlockNPCs;
-  setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
-  setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
-
   // RadialBreach Integration - Physical Distance Filtering
   let breachPosition: Vector4 = this.GetBreachPosition();
   let maxDistance: Float = this.GetRadialBreachRange();
@@ -129,62 +124,50 @@ public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref
   let i: Int32 = 0;
   while i < ArraySize(Deref(devices)) {
     let device: ref<DeviceComponentPS> = Deref(devices)[i];
-
+    
     // Physical distance check (RadialBreach integration)
-    let shouldUnlock: Bool = !shouldUseRadialFiltering || this.IsDeviceWithinBreachRadius(device, breachPosition, maxDistance);
-
-    if shouldUnlock {
-      // Apply device-type-specific unlock
-      this.ApplyDeviceTypeUnlock(device, unlockFlags);
-
-      // Process minigame network actions
-      this.ProcessMinigameNetworkActions(device);
-
-      // Queue SetBreachedSubnet event
-      let evt: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-      evt.breachedBasic = setBreachedSubnetEvent.breachedBasic;
-      evt.breachedNPCs = setBreachedSubnetEvent.breachedNPCs;
-      evt.breachedCameras = setBreachedSubnetEvent.breachedCameras;
-      evt.breachedTurrets = setBreachedSubnetEvent.breachedTurrets;
-      this.GetPersistencySystem().QueuePSEvent(device.GetID(), device.GetClassName(), evt);
+    let withinRadius: Bool = !shouldUseRadialFiltering || 
+                             this.IsDeviceWithinBreachRadius(device, breachPosition, maxDistance);
+    
+    if withinRadius {
+      // Process device unlock
+      this.ProcessSingleDeviceUnlock(device, unlockFlags);
     }
-
     i += 1;
   }
 }
 
 /// Applies device-type-specific unlock to all connected devices
 /// Fallback version: No physical filtering (unlocks all devices in network)
+/// Refactored: Reduced nesting from 3 levels to 2 levels
 @if(!ModuleExists("RadialBreach"))
 @addMethod(AccessPointControllerPS)
 public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
-  let setBreachedSubnetEvent: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-  setBreachedSubnetEvent.breachedBasic = unlockFlags.unlockBasic;
-  setBreachedSubnetEvent.breachedNPCs = unlockFlags.unlockNPCs;
-  setBreachedSubnetEvent.breachedCameras = unlockFlags.unlockCameras;
-  setBreachedSubnetEvent.breachedTurrets = unlockFlags.unlockTurrets;
-
   // No RadialBreach filtering - unlock all devices in network
   let i: Int32 = 0;
   while i < ArraySize(Deref(devices)) {
     let device: ref<DeviceComponentPS> = Deref(devices)[i];
-
-    // Apply device-type-specific unlock (no distance check)
-    this.ApplyDeviceTypeUnlock(device, unlockFlags);
-
-    // Process minigame network actions
-    this.ProcessMinigameNetworkActions(device);
-
-    // Queue SetBreachedSubnet event
-    let evt: ref<SetBreachedSubnet> = new SetBreachedSubnet();
-    evt.breachedBasic = setBreachedSubnetEvent.breachedBasic;
-    evt.breachedNPCs = setBreachedSubnetEvent.breachedNPCs;
-    evt.breachedCameras = setBreachedSubnetEvent.breachedCameras;
-    evt.breachedTurrets = setBreachedSubnetEvent.breachedTurrets;
-    this.GetPersistencySystem().QueuePSEvent(device.GetID(), device.GetClassName(), evt);
-
+    this.ProcessSingleDeviceUnlock(device, unlockFlags);
     i += 1;
   }
+}
+
+/// Helper: Process unlock for a single device (shared by both versions)
+@addMethod(AccessPointControllerPS)
+private final func ProcessSingleDeviceUnlock(device: ref<DeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
+  // Apply device-type-specific unlock
+  this.ApplyDeviceTypeUnlock(device, unlockFlags);
+
+  // Process minigame network actions
+  this.ProcessMinigameNetworkActions(device);
+
+  // Queue SetBreachedSubnet event
+  let evt: ref<SetBreachedSubnet> = new SetBreachedSubnet();
+  evt.breachedBasic = unlockFlags.unlockBasic;
+  evt.breachedNPCs = unlockFlags.unlockNPCs;
+  evt.breachedCameras = unlockFlags.unlockCameras;
+  evt.breachedTurrets = unlockFlags.unlockTurrets;
+  this.GetPersistencySystem().QueuePSEvent(device.GetID(), device.GetClassName(), evt);
 }
 
 // ============================================================================

@@ -40,6 +40,7 @@ BetterNetrunning uses **TWO INTENTIONALLY DIFFERENT architectures** for daemon f
 | **Approach** | STATIC DEFINITION (Pre-defined program lists) |
 | **Method** | Device-type-specific minigame selection |
 | **Complexity** | 2 conditions (Camera/Turret/Generic) |
+| **Visibility Control** | Settings-based toggle (Computer/Device/Vehicle) |
 | **Benefits** | Simple, performant, compatible with CustomHacking API |
 | **Reason** | CustomHackingSystem constraint (no dynamic filtering) |
 | **Limitation** | Cannot filter by network/distance at minigame runtime |
@@ -60,6 +61,13 @@ Despite architectural differences, both systems share common utilities via **mod
 - `IsCameraDaemon()`, `IsTurretDaemon()`, `IsNPCDaemon()`, `IsBasicDaemon()`
 - `GetDaemonTypeName()` - Human-readable daemon type names
 - Daemon type identification for both systems
+
+### BonusDaemonUtils (Bonus Daemon Application)
+- `ApplyBonusDaemons()` - Auto-apply bonus daemons based on settings and success count
+- `HasProgram()` - Check if program exists in array
+- `CountNonDataminePrograms()` - Count non-datamine daemons for auto-datamine logic
+- `HasAnyDatamineProgram()` - Check if any datamine program exists
+- Phase 5 implementation: Auto-execute PING, Auto-apply Datamine (Basic/Advanced/Master)
 
 ### DaemonUnlockStrategy (Strategy Pattern)
 - `IDaemonUnlockStrategy` - Interface for daemon unlock behavior
@@ -121,6 +129,20 @@ CustomHackingSystem v1.3.0 uses static program lists defined in Lua:
 - `TurretRemoteBreach` → [Basic, Camera, NPC, Turret] daemons
 - `GenericRemoteBreach` → [Basic] daemon only
 
+**Visibility Control (Settings-based Toggle)**
+RemoteBreach actions can be toggled ON/OFF per device type via user settings:
+- `RemoteBreachEnabledComputer` (default: true)
+- `RemoteBreachEnabledDevice` (default: true)
+- `RemoteBreachEnabledVehicle` (default: true)
+
+**Implementation**: Two-layer visibility control
+1. **RemoteBreachVisibility.reds**: Early prevention (TryAddCustomRemoteBreach)
+   - Checks settings before creating actions
+   - Prevents unnecessary action instantiation
+2. **RemoteBreachAction_*.reds**: Enforcement layer (GetQuickHackActions)
+   - Validates settings before adding to action array
+   - Integrates with UnlockIfNoAccessPoint setting (OR condition)
+
 **Selection logic in `GetDeviceMinigameID()`:**
 ```redscript
 if DeviceTypeUtils.IsCamera(devicePS) {
@@ -132,6 +154,22 @@ if DeviceTypeUtils.IsCamera(devicePS) {
 }
 ```
 
+**Visibility check example (RemoteBreachAction_Device.reds):**
+```redscript
+@wrapMethod(ScriptableDeviceComponentPS)
+protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, ...) {
+    wrappedMethod(actions, context);
+
+    // Check if Device RemoteBreach is enabled AND UnlockIfNoAccessPoint is disabled
+    if !BetterNetrunningSettings.RemoteBreachEnabledDevice() ||
+       BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+        return;  // Skip RemoteBreach action creation
+    }
+
+    // ... create and add RemoteBreach action
+}
+```
+
 **Refactored Structure (2025-10-08):**
 - Strategy Pattern: Device-specific unlock behavior encapsulated
 - Daemon processing uses `ProcessDaemonWithStrategy()`
@@ -139,6 +177,7 @@ if DeviceTypeUtils.IsCamera(devicePS) {
 - 509 lines of duplicate code eliminated
 
 ⚠️ **Limitation**: Cannot filter by network/distance at runtime
+⚠️ **Settings Control**: RemoteBreach visibility can be toggled per device type
 ⚠️ **Future**: Requires CustomHackingSystem API extension (dynamic filtering)
 
 ---
@@ -173,7 +212,8 @@ r6/scripts/BetterNetrunning/
 │   ├── BreachProcessing.reds       ← RefreshSlaves, breach completion (246 lines)
 │   └── BreachHelpers.reds          ← Network hierarchy, minigame status (108 lines)
 │
-├── Common/                         ← Shared utilities (5 modules)
+├── Common/                         ← Shared utilities (6 modules)
+│   ├── BonusDaemonUtils.reds       ← Bonus daemon application (Phase 5)
 │   ├── DaemonUtils.reds            ← Daemon type identification
 │   ├── DeviceTypeUtils.reds        ← Device type detection
 │   ├── DNRGating.reds              ← Daemon Netrunning Revamp integration
@@ -184,12 +224,12 @@ r6/scripts/BetterNetrunning/
 │   ├── DaemonImplementation.reds   ← Daemon execution logic
 │   ├── DaemonRegistration.reds     ← Daemon program registration
 │   ├── DaemonUnlockStrategy.reds   ← Strategy Pattern implementations
-│   ├── RemoteBreachAction_Computer.reds
-│   ├── RemoteBreachAction_Device.reds
-│   ├── RemoteBreachAction_Vehicle.reds
+│   ├── RemoteBreachAction_Computer.reds ← Computer RemoteBreach + visibility control
+│   ├── RemoteBreachAction_Device.reds   ← Device RemoteBreach + visibility control
+│   ├── RemoteBreachAction_Vehicle.reds  ← Vehicle RemoteBreach + visibility control
 │   ├── RemoteBreachProgram.reds    ← Daemon programs (Basic/NPC/Camera/Turret)
 │   ├── RemoteBreachSystem.reds     ← RemoteBreach minigame system
-│   └── RemoteBreachVisibility.reds ← Visibility management
+│   └── RemoteBreachVisibility.reds ← Visibility management + settings-based control
 │
 ├── RadialUnlock/                   ← Radial unlock system (3 modules, 788 lines)
 │   ├── RadialUnlockSystem.reds     ← Position-based breach tracking (50m radius, 338 lines)
@@ -258,14 +298,17 @@ r6/scripts/BetterNetrunning/
 ### 1. Separation of Concerns
 ✅ Device detection logic → `DeviceTypeUtils` (shared module)
 ✅ Daemon identification → `DaemonUtils` (shared module)
+✅ Bonus daemon application → `BonusDaemonUtils` (shared module, Phase 5)
 ✅ Unlock behavior → `DaemonUnlockStrategy` (Strategy Pattern)
 ✅ AccessPointBreach filtering → `betterNetrunning.reds` (dynamic)
 ✅ RemoteBreach selection → `RemoteBreachAction_*.reds` (static)
+✅ RemoteBreach visibility control → Settings-based toggle (Computer/Device/Vehicle)
 ✅ Radial unlock system → `RadialUnlock/*` (dedicated module)
 
 ### 2. Single Source of Truth
 ✅ Device type checks: `DeviceTypeUtils.IsCamera()`
 ✅ Daemon type checks: `DaemonUtils.IsCameraDaemon()`
+✅ Bonus daemon application: `BonusDaemonUtils.ApplyBonusDaemons()` (DRY principle)
 ✅ Unlock flags: `BreachUnlockFlags` struct (DeviceTypeUtils.reds)
 ✅ Loot results: `BreachLootResult` struct (DeviceTypeUtils.reds)
 
@@ -286,7 +329,8 @@ r6/scripts/BetterNetrunning/
 ✅ Static minigames for RemoteBreach (minimal runtime overhead)
 ✅ Dynamic filtering only when needed (AccessPointBreach)
 ✅ Cached device type detection (no repeated `IsDefined` checks)
-✅ Eliminated 509 lines of duplicate code
+✅ Eliminated 509 lines of duplicate code (Strategy Pattern refactoring)
+✅ Eliminated 200 lines of duplicate code (BonusDaemonUtils consolidation, Phase 5)
 
 ### 6. Extensibility
 ✅ `DeviceTypeUtils` can be extended for new device types
@@ -294,7 +338,72 @@ r6/scripts/BetterNetrunning/
 ✅ RemoteBreach can add more minigame variants
 ✅ Future CustomHackingSystem v2.0 support ready
 
-### 7. Code Quality Metrics (Post-Refactoring)
+### 7. Modular Design Philosophy (Phase 5 Example: BonusDaemonUtils)
+
+**Design Decision: Keep BonusDaemonUtils separate from DaemonUtils**
+
+| Aspect | Rationale |
+|--------|-----------|
+| **Single Responsibility Principle** | DaemonUtils = Daemon **identification** (static), BonusDaemonUtils = Daemon **execution** (dynamic) |
+| **Dependency Management** | DaemonUtils = No dependencies, BonusDaemonUtils = GameInstance required |
+| **Code Clarity** | File name indicates purpose: "Utils" vs "BonusDaemonUtils" |
+| **Maintainability** | Changes to bonus daemon logic don't affect daemon identification |
+| **Testability** | DaemonUtils = No mocks needed, BonusDaemonUtils = GameInstance mock required |
+
+**BonusDaemonUtils Features (Phase 5):**
+- ✅ Auto-execute PING on any daemon success (AutoExecutePingOnSuccess setting)
+- ✅ Auto-apply Datamine based on success count:
+  - 1 daemon → DatamineV1 (Basic)
+  - 2 daemons → DatamineV2 (Advanced)
+  - 3+ daemons → DatamineV3 (Master)
+- ✅ Used by both AccessPointBreach and RemoteBreach (DRY principle)
+- ✅ Optional logging context for debugging (`"[AccessPoint]"`, `"[RemoteBreach]"`)
+
+**Code Deduplication:**
+- Before: ~200 lines duplicated across BreachProcessing.reds and RemoteBreachNetworkUnlock.reds
+- After: 145 lines in BonusDaemonUtils.reds (single source of truth)
+- Net reduction: ~55 lines + improved maintainability
+
+### 8. User Control & Flexibility (Phase 7: RemoteBreach Visibility Toggle)
+
+**Design Decision: Per-Device-Type RemoteBreach Toggle**
+
+| Aspect | Rationale |
+|--------|-----------|
+| **User Choice** | Some players prefer not to use RemoteBreach at all |
+| **Granular Control** | Enable/disable per device type (Computer/Device/Vehicle) |
+| **Integration with UnlockIfNoAccessPoint** | OR condition: disabled if either RemoteBreach OFF or UnlockIfNoAccessPoint ON |
+| **Two-Layer Defense** | Prevention (RemoteBreachVisibility) + Enforcement (RemoteBreachAction_*) |
+| **Performance** | Early return prevents unnecessary action creation |
+
+**RemoteBreach Visibility Control (Phase 7):**
+- ✅ Settings-based toggle per device type:
+  - `RemoteBreachEnabledComputer` (default: true)
+  - `RemoteBreachEnabledDevice` (default: true)
+  - `RemoteBreachEnabledVehicle` (default: true)
+- ✅ Two-layer visibility control:
+  1. **RemoteBreachVisibility.reds**: Early prevention in `TryAddCustomRemoteBreach()`
+  2. **RemoteBreachAction_*.reds**: Enforcement in `GetQuickHackActions()` wrapMethod
+- ✅ Integration with existing UnlockIfNoAccessPoint setting (OR condition)
+- ✅ LocKey support (en-us, jp-jp) for UI localization
+- ✅ NativeSettings UI integration
+
+**Code Example (RemoteBreachAction_Device.reds):**
+```redscript
+// Check if Device RemoteBreach is enabled AND UnlockIfNoAccessPoint is disabled
+if !BetterNetrunningSettings.RemoteBreachEnabledDevice() ||
+   BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+    return;  // Skip RemoteBreach - user disabled or auto-unlock enabled
+}
+```
+
+**Design Philosophy:**
+- ✅ Respect user preferences (opt-in/opt-out flexibility)
+- ✅ Consistent with existing BetterNetrunning settings pattern
+- ✅ Minimal performance impact (early return pattern)
+- ✅ Future-proof (easily extensible to more device types)
+
+### 9. Code Quality Metrics (Post-Refactoring)
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
@@ -305,7 +414,7 @@ r6/scripts/BetterNetrunning/
 | **Max Function Size** | 95 lines | 30 lines | **-68.4%** |
 | **Nesting Depth** | 6 levels | 2 levels | **-60%** |
 | **Cyclomatic Complexity** | High | Reduced | **-60%** |
-| **Code Duplication** | Extensive | Eliminated | 509 lines removed |
+| **Code Duplication** | Extensive | Eliminated | 709 lines removed (509 + 200) |
 | **Maintainability Index** | Low | High | Significantly improved |
 | **Functional Cohesion** | Mixed concerns | Single responsibility | High cohesion |
 

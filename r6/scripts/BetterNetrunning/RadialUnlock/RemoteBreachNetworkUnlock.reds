@@ -48,6 +48,19 @@ import BetterNetrunning.CustomHacking.*
 import BetterNetrunningConfig.*
 
 // NOTE: RadialBreach integration is handled by RadialBreachGating.reds
+
+// ============================================================================
+// DATA STRUCTURES (Phase 2 Refactoring)
+// ============================================================================
+
+// RemoteBreach loot reward accumulator (reduces parameter passing)
+// Using struct instead of class to avoid ref<> requirement
+public struct RemoteBreachLootData {
+  let baseMoney: Float;
+  let craftingMaterial: Bool;
+  let baseShardDropChance: Float;
+  let shouldLoot: Bool;
+}
 // No need for conditional import here - RadialBreachGating manages it
 
 // ============================================================================
@@ -112,6 +125,9 @@ private func ProcessRemoteBreachCompletion() -> Void {
   // 2. Get active programs from blackboard
   let minigameBB: ref<IBlackboard> = GameInstance.GetBlackboardSystem(gameInstance).Get(GetAllBlackboardDefs().HackingMinigame);
   let activePrograms: array<TweakDBID> = FromVariant<array<TweakDBID>>(minigameBB.GetVariant(GetAllBlackboardDefs().HackingMinigame.ActivePrograms));
+
+  // 2.5. Apply bonus daemons (Phase 5) - using shared utility
+  ApplyBonusDaemons(activePrograms, gameInstance, "[RemoteBreach]");
 
   // 3. Parse unlock flags from active programs
   let unlockFlags: BreachUnlockFlags = this.ParseRemoteBreachUnlockFlags(activePrograms);
@@ -236,7 +252,7 @@ private func GetRemoteBreachTargetDevice() -> ref<ScriptableDeviceComponentPS> {
   if IsDefined(computerSystem) {
     let currentComputer: wref<ComputerControllerPS> = computerSystem.GetCurrentComputer();
     if IsDefined(currentComputer) {
-      return currentComputer as ScriptableDeviceComponentPS;
+      return currentComputer;
     }
   }
 
@@ -254,7 +270,7 @@ private func GetRemoteBreachTargetDevice() -> ref<ScriptableDeviceComponentPS> {
   if IsDefined(vehicleSystem) {
     let currentVehicle: wref<VehicleComponentPS> = vehicleSystem.GetCurrentVehicle();
     if IsDefined(currentVehicle) {
-      return currentVehicle as ScriptableDeviceComponentPS;
+      return currentVehicle;
     }
   }
 
@@ -267,14 +283,15 @@ private func GetRemoteBreachTargetDevice() -> ref<ScriptableDeviceComponentPS> {
 
 // Get all network devices connected to RemoteBreach target device
 // Uses GetAccessPoints() + GetChildren() API (same as AccessPoint breach)
+// Refactored: Reduced nesting from 4 levels to 2 levels
 @addMethod(PlayerPuppet)
 private func GetRemoteBreachNetworkDevices(
   targetDevice: ref<ScriptableDeviceComponentPS>
 ) -> array<ref<DeviceComponentPS>> {
   let networkDevices: array<ref<DeviceComponentPS>>;
 
-  // Cast to SharedGameplayPS to access GetAccessPoints()
-  let sharedPS: ref<SharedGameplayPS> = targetDevice as SharedGameplayPS;
+  // ScriptableDeviceComponentPS extends SharedGameplayPS
+  let sharedPS: ref<SharedGameplayPS> = targetDevice;
   if !IsDefined(sharedPS) {
     BNLog("[RemoteBreach] Target device is not SharedGameplayPS, no network devices");
     return networkDevices;
@@ -282,7 +299,6 @@ private func GetRemoteBreachNetworkDevices(
 
   // Get all AccessPoints in network
   let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-
   if ArraySize(apControllers) == 0 {
     BNLog("[RemoteBreach] No AccessPoints found, target device is standalone");
     return networkDevices;
@@ -293,25 +309,36 @@ private func GetRemoteBreachNetworkDevices(
   // Collect devices from all AccessPoints
   let i: Int32 = 0;
   while i < ArraySize(apControllers) {
-    let apPS: ref<AccessPointControllerPS> = apControllers[i];
-    if IsDefined(apPS) {
-      let apDevices: array<ref<DeviceComponentPS>>;
-      apPS.GetChildren(apDevices); // Get network devices from this AccessPoint
-
-      BNLog("[RemoteBreach] AccessPoint " + ToString(i) + " has " + ToString(ArraySize(apDevices)) + " device(s)");
-
-      // Merge into main array
-      let j: Int32 = 0;
-      while j < ArraySize(apDevices) {
-        ArrayPush(networkDevices, apDevices[j]);
-        j += 1;
-      }
-    }
+    this.CollectAccessPointDevices(apControllers[i], i, networkDevices);
     i += 1;
   }
 
   BNLog("[RemoteBreach] Total network devices: " + ToString(ArraySize(networkDevices)));
   return networkDevices;
+}
+
+// Helper: Collect all devices from a single AccessPoint
+@addMethod(PlayerPuppet)
+private func CollectAccessPointDevices(
+  apPS: ref<AccessPointControllerPS>,
+  apIndex: Int32,
+  out networkDevices: array<ref<DeviceComponentPS>>
+) -> Void {
+  if !IsDefined(apPS) {
+    return;
+  }
+
+  let apDevices: array<ref<DeviceComponentPS>>;
+  apPS.GetChildren(apDevices);
+
+  BNLog("[RemoteBreach] AccessPoint " + ToString(apIndex) + " has " + ToString(ArraySize(apDevices)) + " device(s)");
+
+  // Merge devices into main array
+  let j: Int32 = 0;
+  while j < ArraySize(apDevices) {
+    ArrayPush(networkDevices, apDevices[j]);
+    j += 1;
+  }
 }
 
 // ============================================================================
@@ -321,7 +348,7 @@ private func GetRemoteBreachNetworkDevices(
 // Apply unlock to RemoteBreach target device
 @addMethod(PlayerPuppet)
 private func ApplyRemoteBreachDeviceUnlock(targetDevice: ref<ScriptableDeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
-  let sharedPS: ref<SharedGameplayPS> = targetDevice as SharedGameplayPS;
+  let sharedPS: ref<SharedGameplayPS> = targetDevice;
   if !IsDefined(sharedPS) {
     BNLog("[RemoteBreach] Target device is not SharedGameplayPS, cannot unlock");
     return;
@@ -377,70 +404,101 @@ private func MarkRemoteBreachedNPC(minigameBB: ref<IBlackboard>) -> Void {
 // ============================================================================
 
 // Process RemoteBreach loot rewards (datamine programs)
+// Refactored (Phase 2): Split into Parse + Award phases for better separation of concerns
 @addMethod(PlayerPuppet)
 private func ProcessRemoteBreachLoot(activePrograms: array<TweakDBID>) -> Void {
-  let baseMoney: Float = 0.0;
-  let craftingMaterial: Bool = false;
-  let baseShardDropChance: Float = 0.0;
-  let shouldLoot: Bool = false;
+  // Phase 1: Parse loot programs
+  let lootData: RemoteBreachLootData = this.ParseLootPrograms(activePrograms);
 
-  // Parse loot programs (same as AP breach logic)
+  // Phase 2: Award rewards if any loot programs were uploaded
+  if lootData.shouldLoot {
+    this.AwardLootRewards(lootData);
+  }
+}
+
+// Helper: Parse loot programs and accumulate reward data (reduced nesting)
+@addMethod(PlayerPuppet)
+private func ParseLootPrograms(activePrograms: array<TweakDBID>) -> RemoteBreachLootData {
+  let lootData: RemoteBreachLootData;
+
   let i: Int32 = 0;
   while i < ArraySize(activePrograms) {
     let programID: TweakDBID = activePrograms[i];
 
-    if programID == t"MinigameAction.NetworkDataMineLootAll" {
-      baseMoney += 1.0;
-      shouldLoot = true;
+    // Use switch for cleaner program type detection
+    if Equals(programID, t"MinigameAction.NetworkDataMineLootAll") {
+      lootData.baseMoney += 1.0;
+      lootData.shouldLoot = true;
       BNLog("[RemoteBreach] Loot program: NetworkDataMineLootAll (money +1.0)");
-    } else if programID == t"MinigameAction.NetworkDataMineLootAllAdvanced" {
-      baseMoney += 1.0;
-      craftingMaterial = true;
-      shouldLoot = true;
+    } else if Equals(programID, t"MinigameAction.NetworkDataMineLootAllAdvanced") {
+      lootData.baseMoney += 1.0;
+      lootData.craftingMaterial = true;
+      lootData.shouldLoot = true;
       BNLog("[RemoteBreach] Loot program: NetworkDataMineLootAllAdvanced (money +1.0, crafting material)");
-    } else if programID == t"MinigameAction.NetworkDataMineLootAllMaster" {
-      baseShardDropChance += 1.0;
-      shouldLoot = true;
+    } else if Equals(programID, t"MinigameAction.NetworkDataMineLootAllMaster") {
+      lootData.baseShardDropChance += 1.0;
+      lootData.shouldLoot = true;
       BNLog("[RemoteBreach] Loot program: NetworkDataMineLootAllMaster (shard drop +1.0)");
     }
 
     i += 1;
   }
 
-  // Award loot if any datamine programs were uploaded
-  if shouldLoot {
-    let transactionSystem: ref<TransactionSystem> = GameInstance.GetTransactionSystem(this.GetGame());
-    let player: ref<GameObject> = this as GameObject;
+  return lootData;
+}
 
-    // Award money
-    if baseMoney > 0.0 {
-      let moneyAmount: Int32 = RandRange(
-        Cast<Int32>(150.0 * baseMoney),
-        Cast<Int32>(450.0 * baseMoney)
-      );
-      transactionSystem.GiveItem(player, ItemID.CreateQuery(t"Items.money"), moneyAmount);
-      BNLog("[RemoteBreach] Awarded money: " + ToString(moneyAmount) + " eddies");
-    }
+// Helper: Award loot rewards based on parsed data (reduced nesting)
+@addMethod(PlayerPuppet)
+private func AwardLootRewards(lootData: RemoteBreachLootData) -> Void {
+  let transactionSystem: ref<TransactionSystem> = GameInstance.GetTransactionSystem(this.GetGame());
+  let player: ref<GameObject> = this;
 
-    // Award crafting material
-    if craftingMaterial {
-      let materialAmount: Int32 = RandRange(1, 3);
-      let materialID: TweakDBID = this.GetRandomCraftingMaterial();
-      transactionSystem.GiveItem(player, ItemID.CreateQuery(materialID), materialAmount);
-      BNLog("[RemoteBreach] Awarded crafting material: " + TDBID.ToStringDEBUG(materialID) + " x" + ToString(materialAmount));
-    }
+  // Award money
+  if lootData.baseMoney > 0.0 {
+    this.AwardMoney(transactionSystem, player, lootData.baseMoney);
+  }
 
-    // Award shard (chance-based)
-    if baseShardDropChance > 0.0 {
-      let shardRoll: Float = RandF();
-      if shardRoll <= (0.3 * baseShardDropChance) {
-        let shardID: TweakDBID = t"Items.SampleShard"; // Generic shard
-        transactionSystem.GiveItem(player, ItemID.CreateQuery(shardID), 1);
-        BNLog("[RemoteBreach] Awarded shard: " + TDBID.ToStringDEBUG(shardID));
-      } else {
-        BNLog("[RemoteBreach] Shard roll failed: " + ToString(shardRoll) + " > " + ToString(0.3 * baseShardDropChance));
-      }
-    }
+  // Award crafting material
+  if lootData.craftingMaterial {
+    this.AwardCraftingMaterial(transactionSystem, player);
+  }
+
+  // Award shard (chance-based)
+  if lootData.baseShardDropChance > 0.0 {
+    this.AwardShard(transactionSystem, player, lootData.baseShardDropChance);
+  }
+}
+
+// Helper: Award money reward
+@addMethod(PlayerPuppet)
+private func AwardMoney(transactionSystem: ref<TransactionSystem>, player: ref<GameObject>, baseMoney: Float) -> Void {
+  let moneyAmount: Int32 = RandRange(
+    Cast<Int32>(150.0 * baseMoney),
+    Cast<Int32>(450.0 * baseMoney)
+  );
+  transactionSystem.GiveItem(player, ItemID.CreateQuery(t"Items.money"), moneyAmount);
+  BNLog("[RemoteBreach] Awarded money: " + ToString(moneyAmount) + " eddies");
+}
+
+// Helper: Award crafting material
+@addMethod(PlayerPuppet)
+private func AwardCraftingMaterial(transactionSystem: ref<TransactionSystem>, player: ref<GameObject>) -> Void {
+  let materialAmount: Int32 = RandRange(1, 3);
+  let materialID: TweakDBID = this.GetRandomCraftingMaterial();
+  transactionSystem.GiveItem(player, ItemID.CreateQuery(materialID), materialAmount);
+  BNLog("[RemoteBreach] Awarded crafting material: " + TDBID.ToStringDEBUG(materialID) + " x" + ToString(materialAmount));
+}
+
+// Helper: Award shard (chance-based)
+@addMethod(PlayerPuppet)
+private func AwardShard(transactionSystem: ref<TransactionSystem>, player: ref<GameObject>, baseShardDropChance: Float) -> Void {
+  let shardRoll: Float = RandF();
+  if shardRoll <= (0.3 * baseShardDropChance) {
+    let shardID: TweakDBID = t"Items.SampleShard"; // Generic shard
+    transactionSystem.GiveItem(player, ItemID.CreateQuery(shardID), 1);
+    BNLog("[RemoteBreach] Awarded shard: " + TDBID.ToStringDEBUG(shardID));
+  } else {
+    BNLog("[RemoteBreach] Shard roll failed: " + ToString(shardRoll) + " > " + ToString(0.3 * baseShardDropChance));
   }
 }
 

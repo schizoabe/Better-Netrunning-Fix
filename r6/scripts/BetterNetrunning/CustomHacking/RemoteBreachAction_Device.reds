@@ -113,20 +113,23 @@ protected func GetQuickHackActions(out actions: array<ref<DeviceAction>>, const 
         return;
     }
 
-    if !BetterNetrunningSettings.UnlockIfNoAccessPoint() {
-        let deviceEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
-        if !IsDefined(deviceEntity) {
-            return;
-        }
-
-        let deviceID: EntityID = deviceEntity.GetEntityID();
-        let stateSystem: ref<DeviceRemoteBreachStateSystem> = StateSystemUtils.GetDeviceStateSystem(this.GetGameInstance());
-
-        if IsDefined(stateSystem) && stateSystem.IsDeviceBreached(deviceID) {
-            return;
-        }
-
-        let breachAction: ref<DeviceRemoteBreachAction> = this.ActionCustomDeviceRemoteBreach();
-        ArrayPush(actions, breachAction);
+    // Check if Device RemoteBreach is enabled AND UnlockIfNoAccessPoint is disabled
+    if !BetterNetrunningSettings.RemoteBreachEnabledDevice() || BetterNetrunningSettings.UnlockIfNoAccessPoint() {
+        return;
     }
+
+    let deviceEntity: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
+    if !IsDefined(deviceEntity) {
+        return;
+    }
+
+    let deviceID: EntityID = deviceEntity.GetEntityID();
+    let stateSystem: ref<DeviceRemoteBreachStateSystem> = StateSystemUtils.GetDeviceStateSystem(this.GetGameInstance());
+
+    if IsDefined(stateSystem) && stateSystem.IsDeviceBreached(deviceID) {
+        return;
+    }
+
+    let breachAction: ref<DeviceRemoteBreachAction> = this.ActionCustomDeviceRemoteBreach();
+    ArrayPush(actions, breachAction);
 }

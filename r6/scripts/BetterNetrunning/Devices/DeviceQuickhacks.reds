@@ -292,12 +292,8 @@ protected final func MarkActionsAsQuickHacks(actionsToMark: script_ref<array<ref
     // CustomAccessBreach extends PuppetAction, not ScriptableDeviceAction
     let customBreachAction: ref<CustomAccessBreach> = Deref(actionsToMark)[i] as CustomAccessBreach;
     if IsDefined(customBreachAction) {
-      // CustomAccessBreach doesn't have SetAsQuickHack(), but PuppetAction does
-      // Cast to PuppetAction to access the method
-      let puppetAction: ref<PuppetAction> = customBreachAction as PuppetAction;
-      if IsDefined(puppetAction) {
-        puppetAction.SetAsQuickHack();
-      }
+      // CustomAccessBreach extends PuppetAction, so we can directly use it
+      customBreachAction.SetAsQuickHack();
     }
 
     i += 1;
@@ -367,9 +363,8 @@ public final func GetRemoteActions(out outActions: array<ref<DeviceAction>>, con
     let action: ref<DeviceAction> = outActions[i];
     if IsDefined(action) && Equals(action.actionName, n"RemoteBreach") {
       let className: CName = action.GetClassName();
-      let isCustomAction: Bool = IsCustomRemoteBreachAction(className);
 
-      if isCustomAction {
+      if IsCustomRemoteBreachAction(className) {
         hasCustomRemoteBreach = true;
       } else {
         ArrayErase(outActions, i);

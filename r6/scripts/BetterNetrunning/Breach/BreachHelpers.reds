@@ -40,37 +40,60 @@ public func GetMainframe() -> ref<AccessPointControllerPS> {
  * Vanilla checks device power state (IsON() && !IsBroken()) before counting cameras/turrets.
  * This prevents camera/turret unlock programs from appearing if all devices are disabled.
  * Better Netrunning removes these checks to allow unlocking disabled devices.
+ *
+ * REFACTORED (Phase 2): Reduced nesting from 3 levels to 2 levels
+ * Using Continue Pattern + Extract Method for type detection
  */
 @replaceMethod(AccessPointControllerPS)
 public final const func CheckConnectedClassTypes() -> ConnectedClassTypes {
   let data: ConnectedClassTypes;
-  let puppet: ref<GameObject>;
   let slaves: array<ref<DeviceComponentPS>> = this.GetImmediateSlaves();
-  let i: Int32 = 0;
 
-  // Check device existence regardless of power state
+  let i: Int32 = 0;
   while i < ArraySize(slaves) {
+    // Early exit: All device types found
     if data.surveillanceCamera && data.securityTurret && data.puppet {
       break;
     }
-    // Cast DeviceComponentPS to ScriptableDeviceComponentPS for DaemonFilterUtils
-    let slavePS: ref<ScriptableDeviceComponentPS> = slaves[i] as ScriptableDeviceComponentPS;
-    if IsDefined(slavePS) {
-      if !data.surveillanceCamera && DaemonFilterUtils.IsCamera(slavePS) {
-        data.surveillanceCamera = true;
-      } else if !data.securityTurret && DaemonFilterUtils.IsTurret(slavePS) {
-        data.securityTurret = true;
-      }
-    }
-    if !data.puppet && IsDefined(slaves[i] as PuppetDeviceLinkPS) {
-      puppet = slaves[i].GetOwnerEntityWeak() as GameObject;
-      if IsDefined(puppet) && puppet.IsActive() {
-        data.puppet = true;
-      }
-    }
+
+    // Update device type flags
+    this.UpdateDeviceTypeData(slaves[i], data);
     i += 1;
   }
+
   return data;
+}
+
+// Helper: Update device type detection flags for a single slave device
+@addMethod(AccessPointControllerPS)
+private final func UpdateDeviceTypeData(slave: ref<DeviceComponentPS>, out data: ConnectedClassTypes) -> Void {
+  // Check for Camera/Turret (ScriptableDeviceComponentPS)
+  let slavePS: ref<ScriptableDeviceComponentPS> = slave as ScriptableDeviceComponentPS;
+  if IsDefined(slavePS) {
+    if !data.surveillanceCamera && DaemonFilterUtils.IsCamera(slavePS) {
+      data.surveillanceCamera = true;
+      return;
+    }
+    if !data.securityTurret && DaemonFilterUtils.IsTurret(slavePS) {
+      data.securityTurret = true;
+      return;
+    }
+  }
+
+  // Check for NPC (PuppetDeviceLinkPS)
+  if data.puppet {
+    return;  // Already found
+  }
+
+  let puppetLink: ref<PuppetDeviceLinkPS> = slave as PuppetDeviceLinkPS;
+  if !IsDefined(puppetLink) {
+    return;
+  }
+
+  let puppet: ref<GameObject> = puppetLink.GetOwnerEntityWeak() as GameObject;
+  if IsDefined(puppet) && puppet.IsActive() {
+    data.puppet = true;
+  }
 }
 
 /*

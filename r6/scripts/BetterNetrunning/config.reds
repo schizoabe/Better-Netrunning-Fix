@@ -13,11 +13,15 @@ public class BetterNetrunningSettings {
     public static func AllowBreachingUnconsciousNPCs() -> Bool { return true; }
 
     // RemoteBreach
+    public static func RemoteBreachEnabledComputer() -> Bool { return true; }
+    public static func RemoteBreachEnabledDevice() -> Bool { return true; }
+    public static func RemoteBreachEnabledVehicle() -> Bool { return true; }
     public static func RemoteBreachRAMCostPercent() -> Int32 { return 35; }
 
     // Access Points
     public static func UnlockIfNoAccessPoint() -> Bool { return false; }
-    public static func DisableDatamineOneTwo() -> Bool { return false; }
+    public static func AutoDatamineBySuccessCount() -> Bool { return true; }
+    public static func AutoExecutePingOnSuccess() -> Bool { return true; }
     public static func AllowAllDaemonsOnAccessPoints() -> Bool { return false; }
 
     // Removed Quickhacks
@@ -38,6 +42,9 @@ public class BetterNetrunningSettings {
 
     // Progression
     public static func ProgressionRequireAll() -> Bool { return true; }
+    public static func ProgressionCyberdeckEnabled() -> Bool { return false; }
+    public static func ProgressionIntelligenceEnabled() -> Bool { return false; }
+    public static func ProgressionEnemyRarityEnabled() -> Bool { return false; }
 
     // Progression - Cyberdeck
     public static func ProgressionCyberdeckBasicDevices() -> Int32 { return 1; }
