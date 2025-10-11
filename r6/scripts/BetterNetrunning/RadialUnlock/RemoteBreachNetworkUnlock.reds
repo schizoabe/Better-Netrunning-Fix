@@ -165,6 +165,15 @@ private func ProcessRemoteBreachCompletion() -> Void {
   // 10. Record breach position for Radial Unlock system
   this.RecordRemoteBreachPosition(targetDevice);
 
+  // 11. UNLOCK NEARBY STANDALONE STEP/PIERRE
+  let deviceEntity: wref<GameObject> = targetDevice.GetOwnerEntityWeak() as GameObject;
+  if IsDefined(deviceEntity) {
+    this.UnlockNearbyStandaloneDevices(deviceEntity.GetWorldPosition());
+  }
+  //PIERRE
+
+
+
   BNLog("[RemoteBreach] Network unlock complete");
 }
 
@@ -541,3 +550,69 @@ private func RecordRemoteBreachPosition(targetDevice: ref<ScriptableDeviceCompon
         ToString(devicePosition.Z) + ")");
   BNLog("[RemoteBreach] Standalone devices within 50m radius will be unlockable via Radial Unlock system");
 }
+
+
+// Unlock nearby standalone devices after breaching any device todo: maybe add NPC subnets here too to make hacking regular civilian NPCs lorefriendly. Pierre
+@addMethod(PlayerPuppet)
+private func UnlockNearbyStandaloneDevices(breachPosition: Vector4) -> Void {
+  let gameInstance: GameInstance = this.GetGame();
+  let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
+  
+  if !IsDefined(targetingSystem) {
+    return;
+  }
+
+  // Setup device search query
+  let query: TargetSearchQuery;
+  query.searchFilter = TSF_All(TSFMV.Obj_Device);
+  query.testedSet = TargetingSet.Complete;
+  query.maxDistance = 50.0; // Match radial breach radius
+  query.filterObjectByDistance = true;
+  query.includeSecondaryTargets = false;
+  query.ignoreInstigator = true;
+
+  let parts: array<TS_TargetPartInfo>;
+  targetingSystem.GetTargetParts(this, query, parts);
+
+  let unlockedCount: Int32 = 0;
+  let i: Int32 = 0;
+  while i < ArraySize(parts) {
+    let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
+    
+    if IsDefined(entity) {
+      let device: ref<Device> = entity as Device;
+      if IsDefined(device) {
+        let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
+        
+        if IsDefined(devicePS) {
+          // Check if standalone (no AccessPoints)
+          let sharedPS: ref<SharedGameplayPS> = devicePS;
+          if IsDefined(sharedPS) {
+            let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
+            
+            if ArraySize(apControllers) == 0 {
+              // Standalone device - check distance
+              let devicePos: Vector4 = entity.GetWorldPosition();
+              let distance: Float = Vector4.Distance(breachPosition, devicePos);
+              
+              if distance <= 50.0 {
+                // Unlock based on device type
+                if DaemonFilterUtils.IsCamera(devicePS) {
+                  sharedPS.m_betterNetrunningBreachedCameras = true;
+                } else if DaemonFilterUtils.IsTurret(devicePS) {
+                  sharedPS.m_betterNetrunningBreachedTurrets = true;
+                } else {
+                  sharedPS.m_betterNetrunningBreachedBasic = true;
+                }
+                
+                unlockedCount += 1;
+              }
+            }
+          }
+        }
+      }
+    }
+    i += 1;
+  }
+}
+
