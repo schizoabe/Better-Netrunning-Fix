@@ -100,7 +100,7 @@ Contributions are welcome! Please check [TODO.md](TODO.md) for current developme
 **Fix Project**: SaganoKei
 
 **Contributors**:
-- [@schizoabe](https://github.com/schizoabe) - Bug fix contributions
+- [@schizoabe](https://github.com/schizoabe) - Feature Additions and Bug Fix Contributions
 
 **Collaboration & Compatibility**:
 - **BiasNil** - Developer of [Daemon Netrunning (Revamp)](https://www.nexusmods.com/cyberpunk2077/mods/12523), compatibility integration
