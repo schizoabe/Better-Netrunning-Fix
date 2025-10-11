@@ -102,6 +102,12 @@ Contributions are welcome! Please check [TODO.md](TODO.md) for current developme
 **Contributors**:
 - [@schizoabe](https://github.com/schizoabe) - Bug fix contributions
 
+**Collaboration & Compatibility**:
+- **BiasNil** - Developer of [Daemon Netrunning (Revamp)](https://www.nexusmods.com/cyberpunk2077/mods/12523), compatibility integration
+- **lorddarkflare** - Developer of [Breach Takedown Improved](https://www.nexusmods.com/cyberpunk2077/mods/14171), technical collaboration
+- **rpierrecollado** - Integration features, CustomHackingSystem prototyping, and testing
+
+For detailed collaboration history, see [COLLABORATION_THREAD.md](COLLABORATION_THREAD.md)
 ---
 
 ## 📄 License
