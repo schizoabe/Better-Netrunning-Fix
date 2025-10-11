@@ -44,7 +44,7 @@ public func GetDefaultBreachRadius() -> Float {
 /// Maximum stored breach records (prevents save bloat)
 /// @return Maximum number of breach records to store
 public func GetMaxBreachRecords() -> Int32 {
-  return 50; // Reduced from 100 (only stores AccessPoint IDs, not device hashes)
+  return 50; // Stores AccessPoint IDs only (not device hashes) to minimize save size
 }
 
 /// Records to remove when pruning (20% of max)

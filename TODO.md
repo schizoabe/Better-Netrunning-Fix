@@ -2,6 +2,185 @@
 
 ## High Priority
 
+### Customizable Key Bindings for Unconscious NPC Breach
+- **Status**: ⏳ IN PROGRESS (Analysis Phase Complete)
+- **Priority**: 🔴 HIGH
+- **Description**: Enable user-configurable key bindings for unconscious NPC breach actions via NativeSettings UI
+- **Completion**: 40% (Analysis complete, Implementation pending)
+- **Target Date**: 2025-10-15
+- **Effort Estimate**: 4-6 hours
+
+#### Current Issue
+Unconscious NPC breach actions are hardcoded to Choice1-4 buttons in the interaction system. Users cannot customize these key bindings through the MOD settings screen.
+
+**Current Implementation**:
+- File: `NPCs/NPCLifecycle.reds` Line 110-113
+- Action: `t"Takedown.BreachUnconsciousOfficer"` added to interaction menu
+- Key Binding: Uses game default interaction keys (Choice1_Button through Choice4_Button)
+- User Control: None (hardcoded)
+
+#### Goal
+Allow players to configure breach action keys (1-4) through Better Netrunning's NativeSettings interface, similar to how other mods handle custom key bindings.
+
+#### Implementation Plan
+
+**Recommended Approach**: Input Loader XML + NativeSettings + Interaction System Integration (vehicleSummonTweaksDismiss pattern)
+
+**Phase 1: Input Loader XML Setup** ⏳ PENDING
+- [ ] Create `r6/input/BetterNetrunningBreach.xml`
+- [ ] Define 4 custom contexts: UnconsciousBreach1-4
+- [ ] Define 4 button mappings with `overridableUI` attributes
+- [ ] Include contexts in "Items" context
+- [ ] Set default keys: IK_1, IK_2, IK_3, IK_4
+
+**XML Structure**:
+```xml
+<?xml version="1.0"?>
+<bindings>
+    <!-- Custom contexts for breach actions -->
+    <context name="UnconsciousBreach1">
+        <action name="UnconsciousBreach1" map="UnconsciousBreach1_Button" />
+    </context>
+    <!-- ... contexts 2-4 ... -->
+
+    <context name="Items" append="true">
+        <include name="UnconsciousBreach1" />
+        <!-- ... includes 2-4 ... -->
+    </context>
+
+    <!-- User-overridable mappings -->
+    <mapping name="UnconsciousBreach1_Button" type="Button">
+        <button id="IK_1" overridableUI="unconsciousBreach1" />
+    </mapping>
+    <!-- ... mappings 2-4 ... -->
+</bindings>
+```
+
+**Phase 2: NativeSettings Configuration** ⏳ PENDING
+- [ ] Extend `BetterNetrunningSettings` class in `config.reds`
+- [ ] Add 4 `EInputKey` properties with NativeSettings attributes
+- [ ] Set category: "Unconscious NPC Breach Keys"
+- [ ] Set display names: "Breach Action 1-4"
+- [ ] Add descriptions explaining each key's purpose
+
+**Configuration Structure**:
+```redscript
+public class BetterNetrunningBreachKeysConfig {
+  @runtimeProperty("ModSettings.mod", "BetterNetrunning")
+  @runtimeProperty("ModSettings.category", "Unconscious NPC Breach Keys")
+  @runtimeProperty("ModSettings.displayName", "Breach Action 1")
+  @runtimeProperty("ModSettings.description", "Key for first breach action")
+  public let breachKey1: EInputKey = EInputKey.IK_1;
+
+  // ... breachKey2-4 ...
+}
+```
+
+**Phase 3: Interaction System Integration** ⏳ PENDING
+- [ ] Add `@wrapMethod(interactionWidgetGameController)` to `NPCs/NPCLifecycle.reds`
+- [ ] Implement `OnUpdateInteraction()` wrapper
+- [ ] Detect unconscious NPC breach context
+- [ ] Dynamically assign custom keys to interaction choices
+- [ ] Apply user-configured keys from NativeSettings
+
+**Integration Logic**:
+```redscript
+@wrapMethod(interactionWidgetGameController)
+protected cb func OnUpdateInteraction(argValue: Variant) -> Bool {
+  let cfg: ref<BetterNetrunningBreachKeysConfig> = new BetterNetrunningBreachKeysConfig();
+  let interactionData: InteractionChoiceHubData = FromVariant<InteractionChoiceHubData>(argValue);
+  let interactionChoices: array<InteractionChoiceData> = interactionData.choices;
+
+  if this.IsUnconsciousNPCBreachContext(interactionChoices) {
+    // Assign custom keys to breach actions
+    for i in 0; i < ArraySize(interactionChoices) {
+      if i == 0 {
+        interactionChoices[i].inputAction = n"UnconsciousBreach1";
+        interactionChoices[i].rawInputKey = cfg.breachKey1;
+      }
+      // ... keys 2-4 ...
+    }
+    interactionData.choices = interactionChoices;
+    wrappedMethod(ToVariant(interactionData));
+  } else {
+    wrappedMethod(argValue);
+  }
+  return true;
+}
+```
+
+**Phase 4: Context Detection Helper** ⏳ PENDING
+- [ ] Implement `IsUnconsciousNPCBreachContext()` method
+- [ ] Detect Better Netrunning breach actions in interaction choices
+- [ ] Handle edge cases (empty choices, invalid data)
+
+**Phase 5: Testing** ⏳ PENDING
+- [ ] Test key binding changes in NativeSettings UI
+- [ ] Verify keys update in-game without restart
+- [ ] Test all 4 breach action keys
+- [ ] Test key conflicts with other mods
+- [ ] Test fallback to default keys if config fails
+
+**Phase 6: Documentation** ⏳ PENDING
+- [ ] User guide: How to configure breach keys
+- [ ] Technical doc: Input Loader + NativeSettings integration
+- [ ] Troubleshooting: Common key binding issues
+
+#### Technical Reference
+
+**Reference MODs Analyzed**:
+- ✅ `vehicleSummonTweaksDismiss.reds`: Input Loader + NativeSettings pattern (Lines 1-100)
+- ✅ `DriveAerialVehicle.reds`: InGamePopup system (Lines 1-100)
+- ✅ `Street Vendors/street_vendors.reds`: GlobalInputListener pattern (Line 12-22)
+- ✅ Input Loader GitHub documentation: XML structure, dynamic loading API
+
+**Key API References**:
+- `InteractionChoiceHubData` - Interaction menu data structure
+- `InteractionChoiceData` - Individual choice configuration
+- `.inputAction` - Action name (CName)
+- `.rawInputKey` - Physical key (EInputKey)
+- `overridableUI` attribute - NativeSettings override key
+- `ModuleExists("BetterNetrunning")` - Conditional compilation
+
+#### Benefits
+- ✅ User control over breach keys (not limited to 1-4)
+- ✅ Integration with existing NativeSettings UI
+- ✅ Real-time key changes (no game restart)
+- ✅ Follows established MOD patterns (vehicleSummonTweaksDismiss)
+- ✅ Backward compatible (default keys = 1-4)
+
+#### Risks & Mitigation
+
+**Risk 1**: Key conflicts with other mods
+- **Mitigation**: Use unique action names (UnconsciousBreach1-4), warn in documentation
+
+**Risk 2**: Input Loader not installed
+- **Mitigation**: Graceful fallback to default keys, add Input Loader to dependencies
+
+**Risk 3**: Interaction system changes in future game updates
+- **Mitigation**: Use @wrapMethod (preserves vanilla behavior), add version checks
+
+#### Success Criteria
+- [ ] Keys configurable via NativeSettings UI
+- [ ] Changes apply immediately in-game
+- [ ] All 4 breach action keys functional
+- [ ] No conflicts with vanilla interaction system
+- [ ] Clear user documentation provided
+- [ ] Code follows vehicleSummonTweaksDismiss pattern
+
+#### Dependencies
+- ✅ Input Loader v0.2.3+ (installed at `red4ext/plugins/input_loader/`)
+- ✅ NativeSettings (already used in Better Netrunning)
+- ✅ REDscript compiler (for @wrapMethod support)
+
+#### Reference Files
+- **Current Implementation**: `r6/scripts/BetterNetrunning/NPCs/NPCLifecycle.reds` (Line 110-113)
+- **Reference Pattern**: `r6/scripts/Vehicle Summon Tweaks - Dismiss/vehicleSummonTweaksDismiss.reds`
+- **Input Loader Docs**: https://github.com/jackhumbert/cyberpunk2077-input-loader
+- **Existing Input XMLs**: `r6/input/VehicleDismiss.xml`, `r6/input/MetroPocketGuide.xml`
+
+---
+
 ### MOD Compatibility Improvements - Phase 2 & 3
 - **Status**: ⏳ IN PROGRESS (Phase 1 Complete)
 - **Priority**: 🔴 HIGH
@@ -800,15 +979,6 @@ private func CalculateNetworkCentroid(devices: array<ref<DeviceComponentPS>>) ->
 - `RADIALBREACH_INTEGRATION_ANALYSIS.md` - Technical analysis of integration
 - Analysis: Target-centered vs Network-centered comparison (documented in chat 2025-10-08)
 
-### CustomHackingSystem - Dynamic Program Filtering API
-- **Status**: 💤 Proposed (Pending upstream collaboration)
-- **Priority**: 🟢 LOW
-- **Description**: Add dynamic program filtering capability to CustomHackingSystem
-- **Estimated Timeline**: 4-5 weeks (depends on upstream response)
-- **Effort Estimate**: 20-30 hours
-
-**Decision Criteria**: Proceed if CustomHackingSystem author responds within 2 weeks
-
 ### Daemon Netrunning Integration
 - **Status**: 💤 Deferred to future release
 - **Priority**: 🟢 LOW
@@ -837,26 +1007,21 @@ private func CalculateNetworkCentroid(devices: array<ref<DeviceComponentPS>>) ->
 ### 🟡 Medium Priority (0 tasks)
 *No medium priority tasks at this time*
 
-### 🟢 Low Priority (3 tasks)
+### 🟢 Low Priority (2 tasks)
 1. **Phase 5: Network Centroid Calculation Option**
    - Status: 💡 UNDER CONSIDERATION
    - Next Action: Gather user feedback from Phase 4 testing
    - Effort: 4-6 hours
 
-2. **CustomHackingSystem - Dynamic Program Filtering API**
-   - Status: 💤 Proposed
-   - Next Action: Create GitHub Issue on CustomHackingSystem repository
-
-3. **Daemon Netrunning Integration**
+2. **Daemon Netrunning Integration**
    - Status: 💤 Deferred
    - Next Action: Re-evaluate after user demand assessment
 
-**Total Active Tasks**: 5
+**Total Active Tasks**: 4
 **Immediate Actions Required**: 2
   - MOD Compatibility Phase 2: API Research (OnIncapacitated, OnAccessPointMiniGameStatus)
   - RadialBreach Integration: User testing execution
-**Blocked Tasks**: 3 (Waiting for external responses/dependencies/feedback)
-  - CustomHackingSystem - Dynamic Program Filtering API (Low Priority)
+**Blocked Tasks**: 1 (Waiting for external responses/dependencies/feedback)
   - Daemon Netrunning Integration (Low Priority)
 
 ---
@@ -879,4 +1044,4 @@ private func CalculateNetworkCentroid(devices: array<ref<DeviceComponentPS>>) ->
 
 ---
 
-Last updated: 2025-10-08
+Last updated: 2025-10-10

@@ -23,20 +23,15 @@ import BetterNetrunning.RadialUnlock.*
 /*
  * Processes breach minigame results and unlocks quickhacks network-wide
  *
- * VERSION HISTORY:
- * - Release version: Simple breach state tracking without radial unlock
- * - Latest version: Added radial unlock system + network centroid calculation
- *
  * VANILLA DIFF: Complete rewrite to implement progressive unlock per device type
  * Handles loot rewards and progressive unlock per device type
  *
- * NEW FEATURES (Latest):
+ * FEATURES:
  * - Radial unlock: Records breach position for standalone device support (50m radius)
  * - Network centroid: Calculates average position of all devices for accurate breach location
  * - Isolated NPC detection: Auto-unlocks NPCs not connected to any network
  *
- * REFACTORED: Reduced from 95 lines with 5-level nesting to 30 lines with 2-level nesting
- * Using Composed Method pattern for improved readability
+ * ARCHITECTURE: Composed Method pattern with shallow nesting (max 2 levels)
  */
 @replaceMethod(AccessPointControllerPS)
 private final func RefreshSlaves(const devices: script_ref<array<ref<DeviceComponentPS>>>) -> Void {
@@ -75,7 +70,7 @@ private final func GetActiveMinigamePrograms() -> array<TweakDBID> {
   this.CheckMasterRunnerAchievement(ArraySize(minigamePrograms));
   this.FilterRedundantPrograms(minigamePrograms);
 
-  // Apply bonus daemons (Phase 5) - using shared utility
+  // Apply bonus daemons - using shared utility
   ApplyBonusDaemons(minigamePrograms, this.GetGameInstance(), "[AccessPoint]");
 
   return minigamePrograms;

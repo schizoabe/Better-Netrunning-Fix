@@ -4,36 +4,21 @@
 // Extends RemoteBreach (CustomHackingSystem) to apply network effects similar
 // to AccessPoint breach. Provides target device unlock + Radial Unlock support.
 //
-// PHASE 1 IMPLEMENTATION (Partial Network Unlock):
-// - Target device unlock (immediate)
-// - Radial Unlock position recording (50m radius for standalone devices)
-// - Limited network propagation (target device only, no full network expansion)
-//
-// PHASE 2 IMPLEMENTATION (Full Network Unlock) - 2025-10-08:
-// - Network-wide device unlock (same as AccessPoint breach)
-// - GetAccessPoints() + GetChildren() API for network traversal
-// - Daemon-based device filtering (Camera/Turret/NPC/Basic)
-// - Complete feature parity with AccessPoint breach
-//
-// PHASE 3 IMPLEMENTATION (Feature Parity) - 2025-10-08:
-// - NPC duplicate breach prevention (m_betterNetrunningWasDirectlyBreached flag)
-// - Loot reward system (Datamine programs: money/crafting materials/shards)
-// - Complete functional parity with AccessPoint/UnconsciousNPC breach
-//
-// PHASE 4 IMPLEMENTATION (RadialBreach Integration) - 2025-10-08:
-// - Physical distance filtering (RadialBreach MOD integration)
-// - Conditional compilation (@if(ModuleExists("RadialBreach")))
-// - Syncs breach range with RadialBreach settings (50m default)
-// - Complete consistency with AccessPoint breach behavior
-// - RadialBreach logic delegated to RadialBreachGating.reds
+// FUNCTIONALITY:
+// - Target device unlock: Immediate unlock of breached device
+// - Network-wide unlock: Propagates unlock to all connected devices (same as AccessPoint breach)
+// - Radial Unlock: Records breach position for standalone device support (50m radius)
+// - NPC duplicate prevention: Tracks directly breached NPCs (m_betterNetrunningWasDirectlyBreached flag)
+// - Loot rewards: Datamine programs provide money/crafting materials/shards
+// - RadialBreach integration: Physical distance filtering (50m default)
 //
 // ARCHITECTURE:
 // - Blackboard listener on HackingMinigame.State for completion detection
 // - RemoteBreachStateSystem integration for target device retrieval
 // - DeviceTypeUtils for unified device unlock logic
 // - RadialUnlockSystem for position recording
-// - TransactionSystem for loot rewards (Phase 3)
-// - RadialBreachGating for physical distance filtering (Phase 4)
+// - TransactionSystem for loot rewards
+// - RadialBreachGating for physical distance filtering
 //
 // DEPENDENCIES:
 // - BetterNetrunning.Common.* (DeviceTypeUtils, BNLog)
@@ -50,7 +35,7 @@ import BetterNetrunningConfig.*
 // NOTE: RadialBreach integration is handled by RadialBreachGating.reds
 
 // ============================================================================
-// DATA STRUCTURES (Phase 2 Refactoring)
+// DATA STRUCTURES
 // ============================================================================
 
 // RemoteBreach loot reward accumulator (reduces parameter passing)
@@ -107,10 +92,10 @@ protected cb func OnRemoteBreachMinigameStateChanged(value: Int32) -> Bool {
 // ============================================================================
 
 // Process RemoteBreach completion and apply network unlock + rewards
-// Phases implemented:
-//   Phase 1: Target device unlock + Radial Unlock position recording
-//   Phase 2: Network-wide device unlock (full parity with AP breach)
-//   Phase 3: NPC duplicate prevention + Loot reward system
+// Functionality:
+//   - Target device unlock + Radial Unlock position recording
+//   - Network-wide device unlock (full parity with AP breach)
+//   - NPC duplicate prevention + Loot reward system
 @addMethod(PlayerPuppet)
 private func ProcessRemoteBreachCompletion() -> Void {
   let gameInstance: GameInstance = this.GetGame();
@@ -126,7 +111,7 @@ private func ProcessRemoteBreachCompletion() -> Void {
   let minigameBB: ref<IBlackboard> = GameInstance.GetBlackboardSystem(gameInstance).Get(GetAllBlackboardDefs().HackingMinigame);
   let activePrograms: array<TweakDBID> = FromVariant<array<TweakDBID>>(minigameBB.GetVariant(GetAllBlackboardDefs().HackingMinigame.ActivePrograms));
 
-  // 2.5. Apply bonus daemons (Phase 5) - using shared utility
+  // 2.5. Apply bonus daemons - using shared utility
   ApplyBonusDaemons(activePrograms, gameInstance, "[RemoteBreach]");
 
   // 3. Parse unlock flags from active programs
@@ -145,34 +130,31 @@ private func ProcessRemoteBreachCompletion() -> Void {
     return;
   }
 
-  // 5. Apply unlock to target device (Phase 1)
+  // 5. Apply unlock to target device
   this.ApplyRemoteBreachDeviceUnlock(targetDevice, unlockFlags);
 
-  // 6. Get network devices (Phase 2)
+  // 6. Get network devices
   let networkDevices: array<ref<DeviceComponentPS>> = this.GetRemoteBreachNetworkDevices(targetDevice);
 
-  // 7. Apply unlock to network devices (Phase 2 + Phase 4: RadialBreach filtering)
+  // 7. Apply unlock to network devices (with RadialBreach filtering)
   if ArraySize(networkDevices) > 0 {
     this.ApplyRemoteBreachNetworkUnlock(targetDevice, networkDevices, unlockFlags);
   }
 
-  // 8. Mark directly breached NPC (Phase 3 - prevent duplicate breach)
-  this.MarkRemoteBreachedNPC(minigameBB);
+  // 8. Mark directly breached NPC (prevent duplicate breach)
+  this.MarkDirectlyBreachedNPC(targetDevice);
 
-  // 9. Process loot rewards (Phase 3 - reward system)
+  // 9. Process loot rewards (reward system)
   this.ProcessRemoteBreachLoot(activePrograms);
 
   // 10. Record breach position for Radial Unlock system
   this.RecordRemoteBreachPosition(targetDevice);
 
-  // 11. UNLOCK NEARBY STANDALONE STEP/PIERRE
+  // 11. Unlock nearby standalone devices (PR #5 feature)
   let deviceEntity: wref<GameObject> = targetDevice.GetOwnerEntityWeak() as GameObject;
   if IsDefined(deviceEntity) {
     this.UnlockNearbyStandaloneDevices(deviceEntity.GetWorldPosition());
   }
-  //PIERRE
-
-
 
   BNLog("[RemoteBreach] Network unlock complete");
 }
@@ -287,12 +269,12 @@ private func GetRemoteBreachTargetDevice() -> ref<ScriptableDeviceComponentPS> {
 }
 
 // ============================================================================
-// NETWORK DEVICE RETRIEVAL (PHASE 2)
+// NETWORK DEVICE RETRIEVAL
 // ============================================================================
 
 // Get all network devices connected to RemoteBreach target device
 // Uses GetAccessPoints() + GetChildren() API (same as AccessPoint breach)
-// Refactored: Reduced nesting from 4 levels to 2 levels
+// Architecture: Shallow nesting (max 2 levels) using helper methods
 @addMethod(PlayerPuppet)
 private func GetRemoteBreachNetworkDevices(
   targetDevice: ref<ScriptableDeviceComponentPS>
@@ -351,7 +333,7 @@ private func CollectAccessPointDevices(
 }
 
 // ============================================================================
-// DEVICE UNLOCK LOGIC (PHASE 1)
+// DEVICE UNLOCK LOGIC
 // ============================================================================
 
 // Apply unlock to RemoteBreach target device
@@ -393,10 +375,21 @@ private func ApplyRemoteBreachDeviceUnlock(targetDevice: ref<ScriptableDeviceCom
 }
 
 // ============================================================================
-// NPC DUPLICATE BREACH PREVENTION (PHASE 3)
+// NPC DUPLICATE BREACH PREVENTION
 // ============================================================================
 
-// Mark directly breached NPC to prevent duplicate breach
+// Mark directly breached NPC to prevent duplicate breach (Device-based version)
+@addMethod(PlayerPuppet)
+private func MarkDirectlyBreachedNPC(targetDevice: ref<ScriptableDeviceComponentPS>) -> Void {
+  // Check if target device is an NPC
+  let npcPS: ref<ScriptedPuppetPS> = targetDevice as ScriptedPuppetPS;
+  if IsDefined(npcPS) {
+    npcPS.m_betterNetrunningWasDirectlyBreached = true;
+    BNLog("[RemoteBreach] Marked NPC as directly breached (prevents unconscious breach)");
+  }
+}
+
+// Mark directly breached NPC to prevent duplicate breach (Blackboard-based version)
 @addMethod(PlayerPuppet)
 private func MarkRemoteBreachedNPC(minigameBB: ref<IBlackboard>) -> Void {
   // Get entity from blackboard (same as AP breach)
@@ -409,17 +402,17 @@ private func MarkRemoteBreachedNPC(minigameBB: ref<IBlackboard>) -> Void {
 }
 
 // ============================================================================
-// LOOT REWARD SYSTEM (PHASE 3)
+// LOOT REWARD SYSTEM
 // ============================================================================
 
 // Process RemoteBreach loot rewards (datamine programs)
-// Refactored (Phase 2): Split into Parse + Award phases for better separation of concerns
+// Architecture: Separated Parse and Award phases for clarity
 @addMethod(PlayerPuppet)
 private func ProcessRemoteBreachLoot(activePrograms: array<TweakDBID>) -> Void {
-  // Phase 1: Parse loot programs
+  // Step 1: Parse loot programs
   let lootData: RemoteBreachLootData = this.ParseLootPrograms(activePrograms);
 
-  // Phase 2: Award rewards if any loot programs were uploaded
+  // Step 2: Award rewards if any loot programs were uploaded
   if lootData.shouldLoot {
     this.AwardLootRewards(lootData);
   }
@@ -551,16 +544,54 @@ private func RecordRemoteBreachPosition(targetDevice: ref<ScriptableDeviceCompon
   BNLog("[RemoteBreach] Standalone devices within 50m radius will be unlockable via Radial Unlock system");
 }
 
+// ============================================================================
+// NEARBY STANDALONE DEVICE UNLOCK (PR #5 Feature)
+// ============================================================================
 
-// Unlock nearby standalone devices after breaching any device todo: maybe add NPC subnets here too to make hacking regular civilian NPCs lorefriendly. Pierre
+/*
+ * Unlock nearby standalone devices after breaching any device
+ *
+ * FEATURE: Auto-unlock standalone devices within 50m radius
+ * RATIONALE: Extends RemoteBreach effectiveness to nearby isolated devices
+ *
+ * TODO: Maybe add NPC subnets here too to make hacking regular civilian NPCs lorefriendly. - Pierre
+ */
 @addMethod(PlayerPuppet)
 private func UnlockNearbyStandaloneDevices(breachPosition: Vector4) -> Void {
   let gameInstance: GameInstance = this.GetGame();
   let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
-  
+
   if !IsDefined(targetingSystem) {
+    BNLog("[RadialUnlock] TargetingSystem not available, cannot unlock nearby devices");
     return;
   }
+
+  // Search for nearby devices
+  let nearbyDevices: array<ref<ScriptableDeviceComponentPS>> = this.FindNearbyDevices(targetingSystem);
+
+  if ArraySize(nearbyDevices) == 0 {
+    BNLog("[RadialUnlock] No nearby devices found within 50m");
+    return;
+  }
+
+  BNLog("[RadialUnlock] Found " + ToString(ArraySize(nearbyDevices)) + " nearby device(s)");
+
+  // Filter and unlock standalone devices
+  let unlockedCount: Int32 = this.UnlockStandaloneDevices(nearbyDevices);
+
+  if unlockedCount > 0 {
+    BNLog("[RadialUnlock] Auto-unlocked " + ToString(unlockedCount) + " standalone device(s) within 50m radius");
+  } else {
+    BNLog("[RadialUnlock] No standalone devices found (all are networked)");
+  }
+}
+
+// Helper: Find all devices within 50m radius
+@addMethod(PlayerPuppet)
+private func FindNearbyDevices(
+  targetingSystem: ref<TargetingSystem>
+) -> array<ref<ScriptableDeviceComponentPS>> {
+  let devices: array<ref<ScriptableDeviceComponentPS>>;
 
   // Setup device search query
   let query: TargetSearchQuery;
@@ -574,45 +605,78 @@ private func UnlockNearbyStandaloneDevices(breachPosition: Vector4) -> Void {
   let parts: array<TS_TargetPartInfo>;
   targetingSystem.GetTargetParts(this, query, parts);
 
-  let unlockedCount: Int32 = 0;
+  // Extract ScriptableDeviceComponentPS from target parts
   let i: Int32 = 0;
   while i < ArraySize(parts) {
     let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
-    
+
     if IsDefined(entity) {
       let device: ref<Device> = entity as Device;
       if IsDefined(device) {
         let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
-        
         if IsDefined(devicePS) {
-          // Check if standalone (no AccessPoints)
-          let sharedPS: ref<SharedGameplayPS> = devicePS;
-          if IsDefined(sharedPS) {
-            let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-            
-            if ArraySize(apControllers) == 0 {
-              // Standalone device - check distance
-              let devicePos: Vector4 = entity.GetWorldPosition();
-              let distance: Float = Vector4.Distance(breachPosition, devicePos);
-              
-              if distance <= 50.0 {
-                // Unlock based on device type
-                if DaemonFilterUtils.IsCamera(devicePS) {
-                  sharedPS.m_betterNetrunningBreachedCameras = true;
-                } else if DaemonFilterUtils.IsTurret(devicePS) {
-                  sharedPS.m_betterNetrunningBreachedTurrets = true;
-                } else {
-                  sharedPS.m_betterNetrunningBreachedBasic = true;
-                }
-                
-                unlockedCount += 1;
-              }
-            }
-          }
+          ArrayPush(devices, devicePS);
         }
       }
     }
+
     i += 1;
   }
+
+  return devices;
+}
+
+// Helper: Filter for standalone devices and unlock them
+@addMethod(PlayerPuppet)
+private func UnlockStandaloneDevices(
+  devices: array<ref<ScriptableDeviceComponentPS>>
+) -> Int32 {
+  let unlockedCount: Int32 = 0;
+
+  let i: Int32 = 0;
+  while i < ArraySize(devices) {
+    let devicePS: ref<ScriptableDeviceComponentPS> = devices[i];
+    let sharedPS: ref<SharedGameplayPS> = devicePS;
+
+    if IsDefined(sharedPS) {
+      let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
+
+      // Standalone = no AccessPoints
+      if ArraySize(apControllers) == 0 {
+        if this.UnlockSingleDevice(sharedPS, devicePS) {
+          unlockedCount += 1;
+        }
+      }
+    }
+
+    i += 1;
+  }
+
+  return unlockedCount;
+}
+
+// Helper: Unlock a single device based on type
+@addMethod(PlayerPuppet)
+private func UnlockSingleDevice(
+  sharedPS: ref<SharedGameplayPS>,
+  devicePS: ref<ScriptableDeviceComponentPS>
+) -> Bool {
+  // Use DeviceTypeUtils for centralized device type detection
+  let deviceType: DeviceType = DeviceTypeUtils.GetDeviceType(devicePS);
+
+  // Set appropriate breach flag based on device type
+  if Equals(deviceType, DeviceType.Camera) {
+    sharedPS.m_betterNetrunningBreachedCameras = true;
+    return true;
+  } else if Equals(deviceType, DeviceType.Turret) {
+    sharedPS.m_betterNetrunningBreachedTurrets = true;
+    return true;
+  } else {
+    // All other device types (Basic, NPC) use Basic flag
+    sharedPS.m_betterNetrunningBreachedBasic = true;
+    return true;
+  }
+
+  return false;
 }
 

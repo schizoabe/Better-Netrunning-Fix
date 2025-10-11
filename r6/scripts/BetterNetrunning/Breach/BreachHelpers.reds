@@ -41,8 +41,7 @@ public func GetMainframe() -> ref<AccessPointControllerPS> {
  * This prevents camera/turret unlock programs from appearing if all devices are disabled.
  * Better Netrunning removes these checks to allow unlocking disabled devices.
  *
- * REFACTORED (Phase 2): Reduced nesting from 3 levels to 2 levels
- * Using Continue Pattern + Extract Method for type detection
+ * ARCHITECTURE: Continue Pattern + Extract Method with shallow nesting (max 2 levels)
  */
 @replaceMethod(AccessPointControllerPS)
 public final const func CheckConnectedClassTypes() -> ConnectedClassTypes {

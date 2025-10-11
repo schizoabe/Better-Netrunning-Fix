@@ -12,11 +12,7 @@
 // - Enemy Rarity: Checks target NPC's difficulty rating (Weak to MaxTac)
 // - AND/OR Logic: Supports "require all" or "require any" condition combinations
 //
-// VERSION HISTORY:
-// - Release version: Used EnemyLevel for NPC progression checks
-// - Latest version: Changed to EnemyRarity for more granular control (intentional design change)
-//
-// RATIONALE: EnemyRarity provides better progression curve:
+// RATIONALE: EnemyRarity provides granular progression curve:
 // - Weak -> Normal -> Strong -> Elite -> Rare -> Boss -> MiniBoss -> MaxTac
 // - More nuanced than simple level ranges
 // - Aligned with vanilla game's enemy classification system

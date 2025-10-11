@@ -12,7 +12,7 @@
 // - Syncs breach range configuration with RadialBreach settings
 // - Implements physical distance filtering for network devices
 // - Records network centroid position for radial unlock system
-// - Supports both AccessPoint breach and RemoteBreach (Phase 4)
+// - Supports both AccessPoint breach and RemoteBreach
 //
 // ARCHITECTURE:
 // - @if(ModuleExists("RadialBreach")): Full RadialBreach gating enabled
@@ -26,12 +26,6 @@
 // NAMING CONVENTION:
 // - Follows [MOD]Gating.reds pattern (e.g., DNRGating.reds, RadialBreachGating.reds)
 // - "Gating" = Conditional filtering layer for external MOD integration
-//
-// PHASE 4 ADDITIONS (2025-10-08):
-// - RemoteBreach integration via PlayerPuppet methods
-// - ApplyRemoteBreachNetworkUnlock() for RemoteBreach network filtering
-// - GetRadialBreachRangeForRemote() for setting retrieval
-// - IsDeviceWithinRemoteBreachRadius() for distance checks
 // ============================================================================
 
 module BetterNetrunning.RadialUnlock
@@ -112,7 +106,7 @@ public final func IsDeviceWithinBreachRadius(device: ref<DeviceComponentPS>, bre
 
 /// Applies device-type-specific unlock to all connected devices
 /// RadialBreach version: Filters devices by physical proximity
-/// Refactored: Reduced nesting from 4 levels to 2 levels
+/// Architecture: Shallow nesting (max 2 levels) using helper methods
 @if(ModuleExists("RadialBreach"))
 @addMethod(AccessPointControllerPS)
 public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
@@ -124,11 +118,11 @@ public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref
   let i: Int32 = 0;
   while i < ArraySize(Deref(devices)) {
     let device: ref<DeviceComponentPS> = Deref(devices)[i];
-    
+
     // Physical distance check (RadialBreach integration)
-    let withinRadius: Bool = !shouldUseRadialFiltering || 
+    let withinRadius: Bool = !shouldUseRadialFiltering ||
                              this.IsDeviceWithinBreachRadius(device, breachPosition, maxDistance);
-    
+
     if withinRadius {
       // Process device unlock
       this.ProcessSingleDeviceUnlock(device, unlockFlags);
@@ -139,7 +133,7 @@ public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref
 
 /// Applies device-type-specific unlock to all connected devices
 /// Fallback version: No physical filtering (unlocks all devices in network)
-/// Refactored: Reduced nesting from 3 levels to 2 levels
+/// Architecture: Shallow nesting (max 2 levels)
 @if(!ModuleExists("RadialBreach"))
 @addMethod(AccessPointControllerPS)
 public final func ApplyBreachUnlockToDevices(const devices: script_ref<array<ref<DeviceComponentPS>>>, unlockFlags: BreachUnlockFlags) -> Void {
@@ -171,7 +165,7 @@ private final func ProcessSingleDeviceUnlock(device: ref<DeviceComponentPS>, unl
 }
 
 // ============================================================================
-// REMOTEBREACH INTEGRATION (PHASE 4)
+// REMOTEBREACH INTEGRATION
 // ============================================================================
 
 /// Gets RadialBreach range for RemoteBreach filtering (PlayerPuppet version)
@@ -212,7 +206,7 @@ public final func IsDeviceWithinRemoteBreachRadius(
 }
 
 // ============================================================================
-// SHARED HELPER METHODS (PHASE 4 REFACTORING)
+// SHARED HELPER METHODS
 // ============================================================================
 
 /// Applies unlock to a single RemoteBreach network device
@@ -256,7 +250,7 @@ private final func ApplyRemoteBreachDeviceUnlockInternal(
   return true;
 }
 
-/// Applies RemoteBreach network unlock (RadialBreach MOD version - Phase 4)
+/// Applies RemoteBreach network unlock (RadialBreach MOD version)
 /// Uses daemon-based filtering + physical distance filtering
 @if(ModuleExists("RadialBreach"))
 @addMethod(PlayerPuppet)
@@ -287,7 +281,7 @@ public final func ApplyRemoteBreachNetworkUnlock(
     let device: ref<DeviceComponentPS> = networkDevices[i];
 
     if IsDefined(device) {
-      // Physical distance check (RadialBreach integration - Phase 4)
+      // Physical distance check (RadialBreach integration)
       let withinRadius: Bool = !shouldUseRadialFiltering ||
                                this.IsDeviceWithinRemoteBreachRadius(device, breachPosition, maxDistance);
 

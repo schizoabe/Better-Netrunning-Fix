@@ -27,9 +27,9 @@ import BetterNetrunning.RadialUnlock.*
  * - GetRemoteActions(): Provides device quickhack actions based on breach status
  * - CanRevealRemoteActionsWheel(): Controls quickhack menu visibility
  *
- * REFACTORED:
- * SetActionsInactiveUnbreached reduced from 100 lines with 6-level nesting
- * to 25 lines with 2-level nesting using Extract Method pattern.
+ * ARCHITECTURE:
+ * - Shallow nesting (max 2 levels) using Extract Method pattern
+ * - Clear separation of concerns
  *
  * ============================================================================
  */
@@ -41,8 +41,7 @@ import BetterNetrunning.RadialUnlock.*
  * Checks player progression (Cyberdeck tier, Intelligence stat) and device type
  * to determine which quickhacks should be available before successful breach
  *
- * REFACTORED: Reduced from 100 lines with 6-level nesting to 25 lines with 2-level nesting
- * Using Extract Method pattern to improve readability and maintainability
+ * ARCHITECTURE: Shallow nesting (max 2 levels) using Extract Method pattern for clarity
  */
 @addMethod(ScriptableDeviceComponentPS)
 public final func SetActionsInactiveUnbreached(actions: script_ref<array<ref<DeviceAction>>>) -> Void {
@@ -329,10 +328,6 @@ private final func ApplyCommonQuickHackRestrictions(outActions: script_ref<array
 
 /*
  * Provides device quickhack actions based on breach status and player progression
- *
- * VERSION HISTORY:
- * - Release version: Used @replaceMethod with IsQuickHacksExposed() logic
- * - Latest version: Simplified to @replaceMethod without IsQuickHacksExposed() dependency
  *
  * VANILLA DIFF: Replaces SetActionsInactiveAll() with SetActionsInactiveUnbreached() for progressive unlock
  * FIXED: Always apply progressive unlock restrictions in Progressive Mode (don't rely on IsQuickHacksExposed)

@@ -42,7 +42,7 @@ import BetterNetrunningConfig.*
 // RADIAL UNLOCK SYSTEM:
 // - RadialUnlock/RadialUnlockSystem.reds: Position-based breach tracking (50m radius)
 // - RadialUnlock/RadialBreachGating.reds: RadialBreach MOD integration
-// - RadialUnlock/RemoteBreachNetworkUnlock.reds: RemoteBreach network unlock (Phase 1)
+// - RadialUnlock/RemoteBreachNetworkUnlock.reds: RemoteBreach network unlock
 //
 // CUSTOM HACKING SYSTEM:
 // - CustomHacking/*: RemoteBreach integration (9 files)
@@ -56,10 +56,6 @@ import BetterNetrunningConfig.*
 // ==================== MAIN COORDINATION FUNCTION ====================
 //
 // Controls which breach programs (daemons) appear in the minigame
-//
-// VERSION HISTORY:
-// - Release version: Used @replaceMethod
-// - Latest version: Changed to @wrapMethod for better mod compatibility (intentional improvement)
 //
 // FUNCTIONALITY:
 // - Adds new custom daemons (unlock programs for cameras, turrets, NPCs)
@@ -141,10 +137,6 @@ public final func FilterPlayerPrograms(programs: script_ref<array<MinigameProgra
 // ==================== DESIGN DOCUMENTATION ====================
 //
 // DESIGN NOTE: Progressive Unlock Implementation
-//
-// VERSION HISTORY:
-// - Release version: Used @replaceMethod to override QuickHacksExposedByDefault()
-// - Current version: Removed menu visibility overrides (intentional design change)
 //
 // ARCHITECTURE:
 // Better Netrunning maintains vanilla menu visibility behavior while implementing

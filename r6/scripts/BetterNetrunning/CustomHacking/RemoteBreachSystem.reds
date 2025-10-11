@@ -592,7 +592,7 @@ public abstract class RemoteBreachUtils {
 
 @if(ModuleExists("HackingExtensions"))
 public abstract class ComputerRemoteBreachUtils {
-    // Refactored: Reduced nesting from 5 levels to 2 levels
+    // Architecture: Shallow nesting (max 2 levels) using helper methods
     public static func UnlockNetworkDevices(computerPS: ref<ComputerControllerPS>, unlockBasic: Bool, unlockNPCs: Bool, unlockCameras: Bool, unlockTurrets: Bool) -> Void {
         let sharedPS: ref<SharedGameplayPS> = computerPS;
         if !IsDefined(sharedPS) {

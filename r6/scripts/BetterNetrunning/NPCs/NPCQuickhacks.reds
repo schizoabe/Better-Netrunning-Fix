@@ -20,13 +20,9 @@ import BetterNetrunning.Progression.*
  * - Special always-allowed quickhacks (Ping, Whistle)
  * - Tutorial NPC whitelist (bypass progression for tutorial flow)
  *
- * VERSION HISTORY:
- * - Release version: Used EnemyLevel for progression checks
- * - Latest version: Changed to EnemyRarity for more nuanced progression
- *
- * REFACTORED:
- * GetAllChoices reduced from 58 lines with 3-level nesting to 45 lines
- * with 2-level nesting using Extract Method pattern.
+ * ARCHITECTURE:
+ * - Shallow nesting (max 2 levels) using Extract Method pattern
+ * - Continue Pattern for cleaner control flow
  *
  * ============================================================================
  */
@@ -34,17 +30,12 @@ import BetterNetrunning.Progression.*
 /*
  * Controls NPC quickhack availability based on breach status and progression
  *
- * VERSION HISTORY:
- * - Release version: Used EnemyLevel for progression checks
- * - Latest version: Changed to EnemyRarity for more nuanced progression (intentional design change)
- *
  * VANILLA DIFF: Complete rewrite to implement progressive unlock system
  * - Progressive unlock via ShouldUnlockHackNPC() (checks Cyberdeck tier, Intelligence, Enemy Rarity)
  * - Network isolation detection -> auto-unlock for isolated NPCs
  * - Category-based restrictions (Covert, Combat, Control, Ultimate, Ping, Whistle)
  *
- * REFACTORED (Phase 2): Reduced from 3-level nesting to 2-level nesting
- * Using Continue Pattern + Extract Method for cleaner flow
+ * ARCHITECTURE: Shallow nesting (max 2 levels) using Continue Pattern + Extract Method
  */
 @replaceMethod(ScriptedPuppetPS)
 public final const func GetAllChoices(const actions: script_ref<array<wref<ObjectAction_Record>>>, const context: script_ref<GetActionsContext>, puppetActions: script_ref<array<ref<PuppetAction>>>) -> Void {
