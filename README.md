@@ -108,8 +108,4 @@ Contributions are welcome! Please check [TODO.md](TODO.md) for current developme
 - **rpierrecollado** - Integration features, CustomHackingSystem prototyping, and testing
 
 For detailed collaboration history, see [COLLABORATION_THREAD.md](COLLABORATION_THREAD.md)
----
 
-## 📄 License
-
-This project maintains the same license as the original Better Netrunning mod.
