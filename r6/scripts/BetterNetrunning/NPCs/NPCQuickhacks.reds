@@ -89,11 +89,15 @@ private final func ProcessQuickhackAction(
 // ==================== Permission Calculation ====================
 
 // Helper: Calculates NPC hack permissions based on breach state and progression
+
+
+
 @addMethod(ScriptedPuppetPS)
 private final func CalculateNPCHackPermissions() -> NPCHackPermissions {
   let permissions: NPCHackPermissions;
   let gameInstance: GameInstance = this.GetGameInstance();
   let npc: wref<GameObject> = this.GetOwnerEntityWeak() as GameObject;
+  let puppet: wref<ScriptedPuppet> = this.GetOwnerEntity() as ScriptedPuppet;
 
   // Check breach status (m_quickHacksExposed is breach state, not menu visibility)
   permissions.isBreached = this.m_quickHacksExposed;
@@ -102,9 +106,9 @@ private final func CalculateNPCHackPermissions() -> NPCHackPermissions {
   let isConnectedToNetwork: Bool = this.IsConnectedToAccessPoint();
 
   // Auto-unlock if not connected to any network (isolated enemies)
-  if !isConnectedToNetwork {
+/*   if !isConnectedToNetwork {
     permissions.isBreached = true;
-  }
+  } */
 
   // Evaluate progression-based unlock conditions for hack categories
   permissions.allowCovert = ShouldUnlockHackNPC(gameInstance, npc, BetterNetrunningSettings.AlwaysNPCsCovert(), BetterNetrunningSettings.ProgressionCyberdeckNPCsCovert(), BetterNetrunningSettings.ProgressionIntelligenceNPCsCovert(), BetterNetrunningSettings.ProgressionEnemyRarityNPCsCovert());
@@ -114,8 +118,28 @@ private final func CalculateNPCHackPermissions() -> NPCHackPermissions {
   permissions.allowPing = BetterNetrunningSettings.AlwaysAllowPing() || permissions.allowCovert;
   permissions.allowWhistle = BetterNetrunningSettings.AlwaysAllowWhistle() || permissions.allowCovert;
 
+  if IsDefined(puppet) && (puppet.IsCrowd() || puppet.IsVendor()) {
+      // Crowds/vendors REQUIRE breach (no auto-unlock from progression)
+      // Only breach status unlocks their hacks
+      if !permissions.isBreached {
+          permissions.allowCovert = false;
+          permissions.allowCombat = false;
+          permissions.allowControl = false;
+          permissions.allowUltimate = false;
+          permissions.allowPing = BetterNetrunningSettings.AlwaysAllowPing() || permissions.allowCovert;
+          permissions.allowWhistle = BetterNetrunningSettings.AlwaysAllowWhistle() || permissions.allowCovert;
+      };
+  };
+
+
   return permissions;
 }
+
+
+
+
+
+//pierre
 
 // ==================== Action Processing ====================
 
@@ -184,12 +208,23 @@ private final func ShouldQuickhackBeInactive(puppetAction: ref<PuppetAction>, pe
 // Helper: Sets appropriate inactive reason message based on NPC attitude
 @addMethod(ScriptedPuppetPS)
 private final func SetQuickhackInactiveReason(puppetAction: ref<PuppetAction>, attiudeTowardsPlayer: EAIAttitude) -> Void {
+  
+  let puppet: wref<ScriptedPuppet> = this.GetOwnerEntity() as ScriptedPuppet;
+  
+  // CUSTOM: Crowds/vendors use breach message instead of attitude message PIERRE
+  if IsDefined(puppet) && (puppet.IsCrowd() || puppet.IsVendor()) {
+      puppetAction.SetInactiveWithReason(false, "LocKey#7021"); // "BREACH PROTOCOL REQUIRED"
+      return;
+  }
+  // CUSTOM: Crowds/vendors use breach message instead of attitude message PIERRE
+
   if NotEquals(attiudeTowardsPlayer, EAIAttitude.AIA_Friendly) {
     puppetAction.SetInactiveWithReason(false, "LocKey#7021");
   } else {
     puppetAction.SetInactiveWithReason(false, "LocKey#27694");
   }
 }
+
 
 // ==================== Tutorial NPC Whitelist ====================
 
