@@ -1,8 +1,4 @@
-// ============================================================================
-// BETTER NETRUNNING + HACKABLE CIVILIANS INTEGRATION
-// ============================================================================
-// This patches Better Netrunning to recognize crowds/vendors as hackable
-// while respecting its breach/progression system
+
 
 module BetterNetrunning.CivilianPatch
 
@@ -10,9 +6,6 @@ import BetterNetrunningConfig.*
 import BetterNetrunning.Common.*
 
 
-// ============================================================================
-// STEP 1: Make crowds/vendors pass IsQuickHackAble() check
-// ============================================================================
 
 @wrapMethod(ScriptedPuppet)
 public const func IsQuickHackAble() -> Bool {
@@ -53,55 +46,7 @@ public const func IsQuickHackAble() -> Bool {
     return wrappedMethod();
 }
 
-// ============================================================================
-// STEP 2: Patch Better Netrunning's permission calculation for crowds/vendors
-// ============================================================================
 
-/*  @wrapMethod(ScriptedPuppetPS)
-private final func CalculateNPCHackPermissions() -> NPCHackPermissions {
-    let permissions: NPCHackPermissions = wrappedMethod();
-    let puppet: wref<ScriptedPuppet> = this.GetOwnerEntity() as ScriptedPuppet;
-    
-    // CUSTOM: Special handling for crowds and vendors
-    if IsDefined(puppet) && (puppet.IsCrowd() || puppet.IsVendor()) {
-        // Crowds/vendors REQUIRE breach (no auto-unlock from progression)
-        // Only breach status unlocks their hacks
-        if !permissions.isBreached {
-            // Lock all categories if not breached
-            permissions.allowCovert = false;
-            permissions.allowCombat = false;
-            permissions.allowControl = false;
-            permissions.allowUltimate = false;
-            permissions.allowPing = false;
-            permissions.allowWhistle = false;
-        }
-        // If breached, keep whatever permissions were calculated
-    };
-    
-    return permissions;
-} */
-
-// ============================================================================
-// STEP 3: Fix attitude check for crowds/vendors (they're neutral, not hostile)
-// ============================================================================
-
-/* @wrapMethod(ScriptedPuppetPS)
-private final func SetQuickhackInactiveReason(puppetAction: ref<PuppetAction>, attiudeTowardsPlayer: EAIAttitude) -> Void {
-    let puppet: wref<ScriptedPuppet> = this.GetOwnerEntity() as ScriptedPuppet;
-    
-    // CUSTOM: Crowds/vendors use breach message instead of attitude message
-    if IsDefined(puppet) && (puppet.IsCrowd() || puppet.IsVendor()) {
-        puppetAction.SetInactiveWithReason(false, "LocKey#7021"); // "BREACH PROTOCOL REQUIRED"
-        return;
-    };
-    
-    // For regular enemies, use original attitude-based logic
-    wrappedMethod(puppetAction, attiudeTowardsPlayer);
-} */
-
-// ============================================================================
-// STEP 4: Ensure crowds/vendors show in HUD when scannable
-// ============================================================================
 
 @wrapMethod(ScriptedPuppet)
 protected const func ShouldRegisterToHUD() -> Bool {
@@ -113,9 +58,7 @@ protected const func ShouldRegisterToHUD() -> Bool {
     return wrappedMethod();
 }
 
-// ============================================================================
-// STEP 5: Make sure crowds/vendors can be revealed in network pulse
-// ============================================================================
+
 
 @wrapMethod(ScriptedPuppet)
 public const func CanRevealRemoteActionsWheel() -> Bool {
@@ -127,9 +70,7 @@ public const func CanRevealRemoteActionsWheel() -> Bool {
     return wrappedMethod();
 }
 
-// ============================================================================
-// OPTIONAL: Visual feedback for unbreached crowds/vendors
-// ============================================================================
+
 
 @wrapMethod(ScriptedPuppet)
 public const func GetDefaultHighlight() -> ref<FocusForcedHighlightData> {
@@ -154,4 +95,5 @@ public const func GetDefaultHighlight() -> ref<FocusForcedHighlightData> {
     };
     
     return wrappedMethod();
+
 }
