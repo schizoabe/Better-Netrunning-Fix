@@ -86,12 +86,6 @@ private final func DisplayConnectionWindowOnPlayerHUD(shouldDisplay: Bool, attem
   }
 }
 
-
-
-
-/////////// section below is absolutely killing me I cannot find what calls are getting duplicated that when unlocking Personnel Breach, I also end up unlocking Root. I AM SAO confused rn.
-
-
 @replaceMethod(Device)
 protected cb func OnAccessPointMiniGameStatus(evt: ref<AccessPointMiniGameStatus>) -> Bool {
     this.GetDevicePS().HackingMinigameEnded(evt.minigameState);
@@ -120,12 +114,25 @@ protected cb func OnAccessPointMiniGameStatus(evt: ref<AccessPointMiniGameStatus
                       ", Turrets: " + ToString(unlockFlags.unlockTurrets));
             }
             
-            // Record breach position and unlock nearby devices with subnet filtering
+            // Record breach position (always do this)
             RemoteBreachUtils.RecordBreachPosition(devicePS, this.GetGame());
-            this.UnlockNearbyDevicesWithSubnets(devicePS, unlockFlags);
+            
+            // Use Better Netrunning's existing radial unlock functions based on completed daemons
+            if unlockFlags.unlockBasic {
+
+                BNLog("[HackthePlanet -> BetterNetrunning] Unlocking nearby devices...");
+                RemoteBreachUtils.UnlockDevicesInRadius(devicePS, this.GetGame());
+                BNLog("[HackthePlanet -> BetterNetrunning] Devices unlocked");
+            }
+            
+            if unlockFlags.unlockNPCs {
+                BNLog("[HackthePlanet -> BetterNetrunning] Unlocking nearby npcs...");
+                RemoteBreachUtils.UnlockNPCsInRange(devicePS, this.GetGame());
+                BNLog("[HackthePlanet -> BetterNetrunning] NPCs unlocked...");
+            }
 
             if BetterNetrunningSettings.EnableDebugLog() {
-                BNLog("[HackthePlanet -> BetterNetrunning] Recorded virtual AP breach and triggered subnet-aware radial unlock for device: " +
+                BNLog("[HackthePlanet -> BetterNetrunning] Recorded virtual AP breach and triggered radial unlock for device: " +
                       ToString(devicePS.GetOwnerEntityWeak().GetEntityID()));
             };
         };
@@ -208,172 +215,4 @@ private func ParseHackthePlanetUnlockFlags(activePrograms: array<TweakDBID>) -> 
   }
 
   return flags;
-}
-
-// Unlock nearby standalone devices with subnet filtering
-@addMethod(Device)
-private func UnlockNearbyDevicesWithSubnets(breachedDevicePS: ref<ScriptableDeviceComponentPS>, unlockFlags: BreachUnlockFlags) -> Void {
-  let gameInstance: GameInstance = this.GetGame();
-  let player: ref<PlayerPuppet> = GetPlayer(gameInstance);
-  let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
-  
-  
-  if !IsDefined(targetingSystem) || !IsDefined(player) {
-    return;
-  }
-  
-    // Unlock NPCs (separate query needed)
-
-  if unlockFlags.unlockNPCs {
-      this.UnlockNearbyNPCs(player, targetingSystem, unlockFlags);
-  };
-
-  // Unlock devices
-
-  
-  if unlockFlags.unlockBasic {
-      this.UnlockNearbyDevices(player, targetingSystem, unlockFlags);
-  };
-
-
-
-}
-
-// Unlock nearby devices (cameras, turrets, etc.)
-@addMethod(Device)
-private func UnlockNearbyDevices(player: ref<PlayerPuppet>, targetingSystem: ref<TargetingSystem>, unlockFlags: BreachUnlockFlags) -> Void {
-  let query: TargetSearchQuery;
-  query.searchFilter = TSF_All(TSFMV.Obj_Device);
-  query.testedSet = TargetingSet.Complete;
-  query.maxDistance = 50.0;
-  query.filterObjectByDistance = true;
-  query.includeSecondaryTargets = false;
-  query.ignoreInstigator = true;
-  
-  let parts: array<TS_TargetPartInfo>;
-  targetingSystem.GetTargetParts(player, query, parts);
-  
-  let unlockedCount: Int32 = 0;
-  let skippedCount: Int32 = 0;
-  let i: Int32 = 0;
-  
-  while i < ArraySize(parts) {
-    let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
-    
-    if IsDefined(entity) {
-      let device: ref<Device> = entity as Device;
-      if IsDefined(device) {
-        let devicePS: ref<ScriptableDeviceComponentPS> = device.GetDevicePS();
-        if IsDefined(devicePS) {
-          let sharedPS: ref<SharedGameplayPS> = devicePS;
-          if IsDefined(sharedPS) {
-            let apControllers: array<ref<AccessPointControllerPS>> = sharedPS.GetAccessPoints();
-            
-            // Only unlock standalone devices (no AccessPoints)
-            if ArraySize(apControllers) == 0 {
-              // Get device type and check if it should be unlocked based on flags
-              let deviceType: DeviceType = DeviceTypeUtils.GetDeviceType(devicePS);
-              
-              if this.ShouldUnlockDeviceType(deviceType, unlockFlags) {
-                // Set the appropriate breach flag based on device type
-                DeviceTypeUtils.SetBreached(deviceType, sharedPS, true);
-                unlockedCount += 1;
-                
-                if BetterNetrunningSettings.EnableDebugLog() {
-                  BNLog(s"[HackthePlanet] Unlocked device type: " + EnumValueToString("DeviceType", Cast<Int64>(EnumInt(deviceType))));
-                }
-              } else {
-                skippedCount += 1;
-                if BetterNetrunningSettings.EnableDebugLog() {
-                  BNLog(s"[HackthePlanet] Skipped device type (daemon not completed): " + EnumValueToString("DeviceType", Cast<Int64>(EnumInt(deviceType))));
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    i += 1;
-  }
-  
-  if BetterNetrunningSettings.EnableDebugLog() {
-    BNLog(s"[HackthePlanet] Device unlock summary - Unlocked: \(unlockedCount), Skipped: \(skippedCount)");
-  }
-}
-
-// Unlock nearby NPCs (separate from devices)
-@addMethod(Device)
-private func UnlockNearbyNPCs(player: ref<PlayerPuppet>, targetingSystem: ref<TargetingSystem>, unlockFlags: BreachUnlockFlags) -> Void {
-  // Only unlock NPCs if NPC daemon was completed
-  if !unlockFlags.unlockNPCs {
-    if BetterNetrunningSettings.EnableDebugLog() {
-      BNLog("[HackthePlanet] Skipping NPC unlock - NPC daemon not completed");
-    }
-    return;
-  }
-  
-  if BetterNetrunningSettings.EnableDebugLog() {
-    BNLog("[HackthePlanet] Starting NPC unlock (NPC daemon completed)");
-  }
-  
-  let query: TargetSearchQuery;
-  query.searchFilter = TSF_And(TSF_All(TSFMV.Obj_Puppet), TSF_Not(TSFMV.Obj_Player));
-  query.testedSet = TargetingSet.Complete;
-  query.maxDistance = 50.0;
-  query.filterObjectByDistance = true;
-  query.includeSecondaryTargets = false;
-  query.ignoreInstigator = true;
-  
-  let parts: array<TS_TargetPartInfo>;
-  targetingSystem.GetTargetParts(player, query, parts);
-  
-  if BetterNetrunningSettings.EnableDebugLog() {
-    BNLog(s"[HackthePlanet] Found \(ArraySize(parts)) potential NPC targets");
-  }
-  
-  let unlockedCount: Int32 = 0;
-  let i: Int32 = 0;
-  
-  while i < ArraySize(parts) {
-    let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
-    
-    if IsDefined(entity) {
-      let puppet: ref<NPCPuppet> = entity as NPCPuppet;
-      if IsDefined(puppet) {
-        let npcPS: ref<ScriptedPuppetPS> = puppet.GetPS();
-        if IsDefined(npcPS) {
-          // Unlock quickhacks on this NPC
-          npcPS.m_quickHacksExposed = true;
-          unlockedCount += 1;
-          
-          if BetterNetrunningSettings.EnableDebugLog() {
-            BNLog(s"[HackthePlanet] Unlocked NPC: " + ToString(puppet.GetEntityID()));
-          }
-        }
-      }
-    }
-    
-    i += 1;
-  }
-  
-  if BetterNetrunningSettings.EnableDebugLog() {
-    BNLog(s"[HackthePlanet] NPC unlock complete - Unlocked: \(unlockedCount) NPC(s)");
-  }
-}
-
-// Check if device type should be unlocked based on completed daemons
-@addMethod(Device)
-private func ShouldUnlockDeviceType(deviceType: DeviceType, unlockFlags: BreachUnlockFlags) -> Bool {
-  // Check device type against unlock flags (same logic as Better Netrunning)
-  if Equals(deviceType, DeviceType.Camera) {
-    return unlockFlags.unlockCameras;
-  } else if Equals(deviceType, DeviceType.Turret) {
-    return unlockFlags.unlockTurrets;
-  } else if Equals(deviceType, DeviceType.NPC) {
-    return unlockFlags.unlockNPCs;
-  } else {
-    // All other device types use Basic flag
-    return unlockFlags.unlockBasic;
-  }
 }
