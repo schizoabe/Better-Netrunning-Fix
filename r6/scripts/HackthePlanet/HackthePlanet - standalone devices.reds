@@ -13,7 +13,8 @@ protected func OnTogglePersonalLink(evt: ref<TogglePersonalLink>) -> EntityNotif
   if HackthePlanetSettings.HackthePlanet() {
     if IsDefined(lookedAtObject) {
       if Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Computer") || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Spontaneous Craving Satisfaction Machine") || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Weapon Vending Machine") || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Confession Booth") || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Ice Machine") || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Arcade Machine")  || Equals(GetLocalizedText(lookedAtObject.GetDeviceName()),"Pachinko Machine") {
-        this.m_minigameDefinition = t"minigame.ComputerRemoteBreachEasy";
+        // Use proper Computer minigame ID (capitalized) - defaulting to Medium difficulty
+        this.m_minigameDefinition = t"Minigame.ComputerRemoteBreachMedium";
       }
     }
   }
@@ -26,7 +27,8 @@ public const func GetMinigameDefinition() -> TweakDBID {
   let vanilla: TweakDBID = wrappedMethod();
   
   if !TDBID.IsValid(vanilla) {
-    return t"minigame.ComputerRemoteBreachEasy";
+    // Use proper Computer minigame ID (capitalized) - defaulting to Medium difficulty
+    return t"Minigame.ComputerRemoteBreachMedium";
   }
   
   return vanilla;
@@ -62,7 +64,8 @@ private final func DisplayConnectionWindowOnPlayerHUD(shouldDisplay: Bool, attem
     let minigameID: TweakDBID = this.GetDevicePS().GetMinigameDefinition();
     
     if !TDBID.IsValid(minigameID) {
-      minigameID = t"minigame.ComputerRemoteBreachEasy";
+      // Use proper Computer minigame ID (capitalized) - defaulting to Medium difficulty
+      minigameID = t"Minigame.ComputerRemoteBreachMedium";
     }
     if connectionsCount <= 0 {
       connectionsCount = 1;
@@ -82,6 +85,12 @@ private final func DisplayConnectionWindowOnPlayerHUD(shouldDisplay: Bool, attem
     wrappedMethod(shouldDisplay, attempt);
   }
 }
+
+
+
+
+/////////// section below is absolutely killing me I cannot find what calls are getting duplicated that when unlocking Personnel Breach, I also end up unlocking Root. I AM SAO confused rn.
+
 
 @replaceMethod(Device)
 protected cb func OnAccessPointMiniGameStatus(evt: ref<AccessPointMiniGameStatus>) -> Bool {
@@ -141,21 +150,61 @@ protected cb func OnAccessPointMiniGameStatus(evt: ref<AccessPointMiniGameStatus
 private func ParseHackthePlanetUnlockFlags(activePrograms: array<TweakDBID>) -> BreachUnlockFlags {
   let flags: BreachUnlockFlags;
 
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog(s"[HackthePlanet] Parsing unlock flags from \(ArraySize(activePrograms)) active programs");
+  }
+
   let i: Int32 = 0;
   while i < ArraySize(activePrograms) {
     let programID: TweakDBID = activePrograms[i];
+    
+    if BetterNetrunningSettings.EnableDebugLog() {
+      BNLog(s"[HackthePlanet] Program \(i): " + TDBID.ToStringDEBUG(programID));
+    }
 
-    if Equals(programID, t"MinigameAction.UnlockQuickhacks") {
+    // Check for BOTH vanilla and Better Netrunning program IDs
+    
+    // Basic/Root daemon
+    if Equals(programID, t"MinigameAction.UnlockQuickhacks") || 
+       Equals(programID, t"MinigameProgramAction.BN_RemoteBreach_UnlockBasic") {
       flags.unlockBasic = true;
-    } else if Equals(programID, t"MinigameAction.UnlockNPCQuickhacks") {
+      if BetterNetrunningSettings.EnableDebugLog() {
+        BNLog("[HackthePlanet] Found Basic daemon");
+      }
+    } 
+    // NPC daemon
+    else if Equals(programID, t"MinigameAction.UnlockNPCQuickhacks") || 
+            Equals(programID, t"MinigameProgramAction.BN_RemoteBreach_UnlockNPC") {
       flags.unlockNPCs = true;
-    } else if Equals(programID, t"MinigameAction.UnlockCameraQuickhacks") {
+      if BetterNetrunningSettings.EnableDebugLog() {
+        BNLog("[HackthePlanet] Found NPC daemon");
+      }
+    } 
+    // Camera daemon
+    else if Equals(programID, t"MinigameAction.UnlockCameraQuickhacks") || 
+            Equals(programID, t"MinigameProgramAction.BN_RemoteBreach_UnlockCamera") {
       flags.unlockCameras = true;
-    } else if Equals(programID, t"MinigameAction.UnlockTurretQuickhacks") {
+      if BetterNetrunningSettings.EnableDebugLog() {
+        BNLog("[HackthePlanet] Found Camera daemon");
+      }
+    } 
+    // Turret daemon
+    else if Equals(programID, t"MinigameAction.UnlockTurretQuickhacks") || 
+            Equals(programID, t"MinigameProgramAction.BN_RemoteBreach_UnlockTurret") {
       flags.unlockTurrets = true;
+      if BetterNetrunningSettings.EnableDebugLog() {
+        BNLog("[HackthePlanet] Found Turret daemon");
+      }
     }
 
     i += 1;
+  }
+
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog("[HackthePlanet] Unlock flags - Basic: " + ToString(flags.unlockBasic) +
+          ", NPCs: " + ToString(flags.unlockNPCs) +
+          ", Cameras: " + ToString(flags.unlockCameras) +
+          ", Turrets: " + ToString(flags.unlockTurrets));
   }
 
   return flags;
@@ -168,10 +217,31 @@ private func UnlockNearbyDevicesWithSubnets(breachedDevicePS: ref<ScriptableDevi
   let player: ref<PlayerPuppet> = GetPlayer(gameInstance);
   let targetingSystem: ref<TargetingSystem> = GameInstance.GetTargetingSystem(gameInstance);
   
+  
   if !IsDefined(targetingSystem) || !IsDefined(player) {
     return;
   }
   
+    // Unlock NPCs (separate query needed)
+
+  if unlockFlags.unlockNPCs {
+      this.UnlockNearbyNPCs(player, targetingSystem, unlockFlags);
+  };
+
+  // Unlock devices
+
+  
+  if unlockFlags.unlockBasic {
+      this.UnlockNearbyDevices(player, targetingSystem, unlockFlags);
+  };
+
+
+
+}
+
+// Unlock nearby devices (cameras, turrets, etc.)
+@addMethod(Device)
+private func UnlockNearbyDevices(player: ref<PlayerPuppet>, targetingSystem: ref<TargetingSystem>, unlockFlags: BreachUnlockFlags) -> Void {
   let query: TargetSearchQuery;
   query.searchFilter = TSF_All(TSFMV.Obj_Device);
   query.testedSet = TargetingSet.Complete;
@@ -184,6 +254,7 @@ private func UnlockNearbyDevicesWithSubnets(breachedDevicePS: ref<ScriptableDevi
   targetingSystem.GetTargetParts(player, query, parts);
   
   let unlockedCount: Int32 = 0;
+  let skippedCount: Int32 = 0;
   let i: Int32 = 0;
   
   while i < ArraySize(parts) {
@@ -207,6 +278,15 @@ private func UnlockNearbyDevicesWithSubnets(breachedDevicePS: ref<ScriptableDevi
                 // Set the appropriate breach flag based on device type
                 DeviceTypeUtils.SetBreached(deviceType, sharedPS, true);
                 unlockedCount += 1;
+                
+                if BetterNetrunningSettings.EnableDebugLog() {
+                  BNLog(s"[HackthePlanet] Unlocked device type: " + EnumValueToString("DeviceType", Cast<Int64>(EnumInt(deviceType))));
+                }
+              } else {
+                skippedCount += 1;
+                if BetterNetrunningSettings.EnableDebugLog() {
+                  BNLog(s"[HackthePlanet] Skipped device type (daemon not completed): " + EnumValueToString("DeviceType", Cast<Int64>(EnumInt(deviceType))));
+                }
               }
             }
           }
@@ -217,8 +297,68 @@ private func UnlockNearbyDevicesWithSubnets(breachedDevicePS: ref<ScriptableDevi
     i += 1;
   }
   
-  if unlockedCount > 0 && BetterNetrunningSettings.EnableDebugLog() {
-    BNLog(s"[HackthePlanet] Unlocked \(unlockedCount) nearby standalone device(s) with subnet filtering");
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog(s"[HackthePlanet] Device unlock summary - Unlocked: \(unlockedCount), Skipped: \(skippedCount)");
+  }
+}
+
+// Unlock nearby NPCs (separate from devices)
+@addMethod(Device)
+private func UnlockNearbyNPCs(player: ref<PlayerPuppet>, targetingSystem: ref<TargetingSystem>, unlockFlags: BreachUnlockFlags) -> Void {
+  // Only unlock NPCs if NPC daemon was completed
+  if !unlockFlags.unlockNPCs {
+    if BetterNetrunningSettings.EnableDebugLog() {
+      BNLog("[HackthePlanet] Skipping NPC unlock - NPC daemon not completed");
+    }
+    return;
+  }
+  
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog("[HackthePlanet] Starting NPC unlock (NPC daemon completed)");
+  }
+  
+  let query: TargetSearchQuery;
+  query.searchFilter = TSF_And(TSF_All(TSFMV.Obj_Puppet), TSF_Not(TSFMV.Obj_Player));
+  query.testedSet = TargetingSet.Complete;
+  query.maxDistance = 50.0;
+  query.filterObjectByDistance = true;
+  query.includeSecondaryTargets = false;
+  query.ignoreInstigator = true;
+  
+  let parts: array<TS_TargetPartInfo>;
+  targetingSystem.GetTargetParts(player, query, parts);
+  
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog(s"[HackthePlanet] Found \(ArraySize(parts)) potential NPC targets");
+  }
+  
+  let unlockedCount: Int32 = 0;
+  let i: Int32 = 0;
+  
+  while i < ArraySize(parts) {
+    let entity: wref<GameObject> = TS_TargetPartInfo.GetComponent(parts[i]).GetEntity() as GameObject;
+    
+    if IsDefined(entity) {
+      let puppet: ref<NPCPuppet> = entity as NPCPuppet;
+      if IsDefined(puppet) {
+        let npcPS: ref<ScriptedPuppetPS> = puppet.GetPS();
+        if IsDefined(npcPS) {
+          // Unlock quickhacks on this NPC
+          npcPS.m_quickHacksExposed = true;
+          unlockedCount += 1;
+          
+          if BetterNetrunningSettings.EnableDebugLog() {
+            BNLog(s"[HackthePlanet] Unlocked NPC: " + ToString(puppet.GetEntityID()));
+          }
+        }
+      }
+    }
+    
+    i += 1;
+  }
+  
+  if BetterNetrunningSettings.EnableDebugLog() {
+    BNLog(s"[HackthePlanet] NPC unlock complete - Unlocked: \(unlockedCount) NPC(s)");
   }
 }
 
